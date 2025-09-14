@@ -1,0 +1,28 @@
+{
+  "name": "bot-template",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "node build/index.js",
+    "dev": "ts-node src/index.ts",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/sqlite3": "^3.1.11",
+    "better-sqlite3": "^12.2.0",
+    "discord.js": "^14.21.0",
+    "dotenv": "^16.6.1",
+    "proper-lockfile": "^4.1.2",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^24.3.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
