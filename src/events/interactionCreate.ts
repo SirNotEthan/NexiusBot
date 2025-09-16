@@ -16,6 +16,8 @@ import {
     handleReviewButtons
 } from '../interactions/buttons';
 
+import { handleMiddlemanButtons } from '../interactions/buttons/middlemanButtons';
+
 import {
     handleVouchGamemodeSelection,
     handlePaidHelperSelection,
@@ -32,6 +34,8 @@ import {
     handlePaidBioModal,
     handleReviewModal
 } from '../interactions/modals';
+
+import { handleMiddlemanModals } from '../interactions/modals/middlemanModals';
 
 export interface Command {
     data: SlashCommandBuilder;
@@ -214,6 +218,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction): Promise<
     if ((interaction.customId.startsWith('review_') || interaction.customId.startsWith('close_review_')) && !interaction.customId.includes('modal')) {
         await handleReviewButtons(interaction);
     }
+    
+    if (interaction.customId.startsWith('middleman_')) {
+        await handleMiddlemanButtons(interaction);
+    }
 }
 
 async function handleSelectMenuInteraction(interaction: StringSelectMenuInteraction): Promise<void> {
@@ -283,6 +291,10 @@ async function handleModalInteraction(interaction: ModalSubmitInteraction): Prom
     
     if (interaction.customId.startsWith('review_modal_') || interaction.customId.startsWith('close_review_modal_')) {
         await handleReviewModal(interaction);
+    }
+    
+    if (interaction.customId.includes('middleman_')) {
+        await handleMiddlemanModals(interaction);
     }
 }
 

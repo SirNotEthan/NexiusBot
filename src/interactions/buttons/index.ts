@@ -4,3 +4,4 @@ export { handleClaimTicket, handleEditTicket, handleCloseTicket, handleRingHelpe
 export { handleLeaderboardButtons } from './leaderboardButtons';
 export { handleTrackerRefreshButton } from './trackerButtons';
 export { handleReviewButtons } from './reviewButtons';
+export { handleMiddlemanButtons } from './middlemanButtons';

@@ -91,6 +91,59 @@ export interface FreeCarryUsageRecord {
     updated_at: number;
 }
 
+export interface MiddlemanRequestRecord {
+    id: number;
+    ticket_number: string;
+    user_id: string;
+    user_tag: string;
+    channel_id: string;
+    game: string;
+    trade_details: string;
+    trade_value: string;
+    other_party?: string;
+    contact_method: string;
+    status: 'pending' | 'approved' | 'declined' | 'in_progress' | 'completed' | 'disputed';
+    middleman_id?: string;
+    middleman_tag?: string;
+    decline_reason?: string;
+    created_at: number;
+    updated_at: number;
+    completed_at?: number;
+}
+
+export interface MiddlemanTransactionRecord {
+    id: number;
+    request_id: number;
+    party1_id: string;
+    party1_tag: string;
+    party2_id: string;
+    party2_tag: string;
+    middleman_id: string;
+    middleman_tag: string;
+    transaction_details: string;
+    status: 'active' | 'completed' | 'disputed';
+    completion_notes?: string;
+    created_at: number;
+    updated_at: number;
+    completed_at?: number;
+}
+
+export interface MiddlemanDisputeRecord {
+    id: number;
+    transaction_id: string;
+    reporter_id: string;
+    reporter_tag: string;
+    dispute_reason: string;
+    evidence_description?: string;
+    status: 'open' | 'investigating' | 'resolved' | 'closed';
+    resolution?: string;
+    resolved_by?: string;
+    resolved_by_tag?: string;
+    created_at: number;
+    updated_at: number;
+    resolved_at?: number;
+}
+
 class DatabaseManager extends EventEmitter {
     private db: Database.Database | null = null;
     private dbPath: string;
@@ -225,10 +278,61 @@ class DatabaseManager extends EventEmitter {
                 counter INTEGER NOT NULL DEFAULT 1,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
+            )`,
+            `CREATE TABLE IF NOT EXISTS middleman_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_number TEXT UNIQUE NOT NULL,
+                user_id TEXT NOT NULL,
+                user_tag TEXT NOT NULL,
+                channel_id TEXT UNIQUE NOT NULL,
+                game TEXT NOT NULL,
+                trade_details TEXT NOT NULL,
+                trade_value TEXT NOT NULL,
+                other_party TEXT,
+                contact_method TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                middleman_id TEXT,
+                middleman_tag TEXT,
+                decline_reason TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                completed_at INTEGER
+            )`,
+            `CREATE TABLE IF NOT EXISTS middleman_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                party1_id TEXT NOT NULL,
+                party1_tag TEXT NOT NULL,
+                party2_id TEXT NOT NULL,
+                party2_tag TEXT NOT NULL,
+                middleman_id TEXT NOT NULL,
+                middleman_tag TEXT NOT NULL,
+                transaction_details TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                completion_notes TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                completed_at INTEGER,
+                FOREIGN KEY (request_id) REFERENCES middleman_requests(id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS middleman_disputes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_id TEXT NOT NULL,
+                reporter_id TEXT NOT NULL,
+                reporter_tag TEXT NOT NULL,
+                dispute_reason TEXT NOT NULL,
+                evidence_description TEXT,
+                status TEXT NOT NULL DEFAULT 'open',
+                resolution TEXT,
+                resolved_by TEXT,
+                resolved_by_tag TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                resolved_at INTEGER
             )`
         ];
 
-        const tableNames = ['tickets', 'helpers', 'vouches', 'paid_helpers', 'user_messages', 'free_carry_usage', 'ticket_counters'];
+        const tableNames = ['tickets', 'helpers', 'vouches', 'paid_helpers', 'user_messages', 'free_carry_usage', 'ticket_counters', 'middleman_requests', 'middleman_transactions', 'middleman_disputes'];
         
         try {
             this.db!.transaction(() => {
@@ -1083,6 +1187,208 @@ class DatabaseManager extends EventEmitter {
             this.db.close();
         }
         await this.connect();
+    }
+
+    // Middleman Methods
+    async createMiddlemanRequest(data: {
+        ticket_number: string;
+        user_id: string;
+        user_tag: string;
+        channel_id: string;
+        game: string;
+        trade_details: string;
+        trade_value: string;
+        other_party?: string;
+        contact_method: string;
+        status?: string;
+    }): Promise<MiddlemanRequestRecord> {
+        const now = Date.now();
+        const query = `
+            INSERT INTO middleman_requests (
+                ticket_number, user_id, user_tag, channel_id, game, trade_details,
+                trade_value, other_party, contact_method, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        try {
+            const result = this.db!.prepare(query).run([
+                data.ticket_number, data.user_id, data.user_tag, data.channel_id,
+                data.game, data.trade_details, data.trade_value, data.other_party || null,
+                data.contact_method, data.status || 'pending', now, now
+            ]);
+
+            return this.getMiddlemanRequest(String(result.lastInsertRowid))!;
+        } catch (error) {
+            console.error('Error creating middleman request:', error);
+            throw error;
+        }
+    }
+
+    async getMiddlemanRequest(requestId: string): Promise<MiddlemanRequestRecord | null> {
+        const query = 'SELECT * FROM middleman_requests WHERE id = ? OR ticket_number = ?';
+        
+        try {
+            const row = this.db!.prepare(query).get([requestId, requestId]) as MiddlemanRequestRecord | undefined;
+            return row || null;
+        } catch (error) {
+            console.error('Error getting middleman request:', error);
+            throw error;
+        }
+    }
+
+    async updateMiddlemanRequestStatus(requestId: string, status: string, declineReason?: string): Promise<void> {
+        const now = Date.now();
+        let query = 'UPDATE middleman_requests SET status = ?, updated_at = ?';
+        let params: any[] = [status, now];
+
+        if (declineReason) {
+            query += ', decline_reason = ?';
+            params.push(declineReason);
+        }
+
+        if (status === 'completed') {
+            query += ', completed_at = ?';
+            params.push(now);
+        }
+
+        query += ' WHERE id = ? OR ticket_number = ?';
+        params.push(requestId, requestId);
+
+        try {
+            this.db!.prepare(query).run(params);
+        } catch (error) {
+            console.error('Error updating middleman request status:', error);
+            throw error;
+        }
+    }
+
+    async getNextMiddlemanTicketNumber(): Promise<string> {
+        const now = Date.now();
+        const query = `
+            INSERT INTO ticket_counters (game, counter, created_at, updated_at)
+            VALUES ('middleman', 1, ?, ?)
+            ON CONFLICT(game) 
+            DO UPDATE SET 
+                counter = counter + 1,
+                updated_at = ?
+            RETURNING counter
+        `;
+
+        try {
+            const result = this.db!.prepare(query).get([now, now, now]) as { counter: number };
+            return result.counter.toString().padStart(4, '0');
+        } catch (error) {
+            console.error('Error getting next middleman ticket number:', error);
+            throw error;
+        }
+    }
+
+    async createMiddlemanTransaction(data: {
+        request_id: number;
+        party1_id: string;
+        party1_tag: string;
+        party2_id: string;
+        party2_tag: string;
+        middleman_id: string;
+        middleman_tag: string;
+        transaction_details: string;
+    }): Promise<MiddlemanTransactionRecord> {
+        const now = Date.now();
+        const query = `
+            INSERT INTO middleman_transactions (
+                request_id, party1_id, party1_tag, party2_id, party2_tag,
+                middleman_id, middleman_tag, transaction_details, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+        `;
+
+        try {
+            const result = this.db!.prepare(query).run([
+                data.request_id, data.party1_id, data.party1_tag, data.party2_id, data.party2_tag,
+                data.middleman_id, data.middleman_tag, data.transaction_details, now, now
+            ]);
+
+            const getQuery = 'SELECT * FROM middleman_transactions WHERE id = ?';
+            return this.db!.prepare(getQuery).get([result.lastInsertRowid]) as MiddlemanTransactionRecord;
+        } catch (error) {
+            console.error('Error creating middleman transaction:', error);
+            throw error;
+        }
+    }
+
+    async completeMiddlemanTransaction(transactionId: string, completionNotes: string, completedBy: string): Promise<void> {
+        const now = Date.now();
+        const query = `
+            UPDATE middleman_transactions 
+            SET status = 'completed', completion_notes = ?, updated_at = ?, completed_at = ?
+            WHERE id = ?
+        `;
+
+        try {
+            this.db!.prepare(query).run([completionNotes, now, now, transactionId]);
+        } catch (error) {
+            console.error('Error completing middleman transaction:', error);
+            throw error;
+        }
+    }
+
+    async createMiddlemanDispute(data: {
+        transaction_id: string;
+        reporter_id: string;
+        reporter_tag: string;
+        dispute_reason: string;
+        evidence_description?: string;
+        status?: string;
+    }): Promise<MiddlemanDisputeRecord> {
+        const now = Date.now();
+        const query = `
+            INSERT INTO middleman_disputes (
+                transaction_id, reporter_id, reporter_tag, dispute_reason,
+                evidence_description, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        try {
+            const result = this.db!.prepare(query).run([
+                data.transaction_id, data.reporter_id, data.reporter_tag, data.dispute_reason,
+                data.evidence_description || null, data.status || 'open', now, now
+            ]);
+
+            const getQuery = 'SELECT * FROM middleman_disputes WHERE id = ?';
+            return this.db!.prepare(getQuery).get([result.lastInsertRowid]) as MiddlemanDisputeRecord;
+        } catch (error) {
+            console.error('Error creating middleman dispute:', error);
+            throw error;
+        }
+    }
+
+    async getAllPendingMiddlemanRequests(): Promise<MiddlemanRequestRecord[]> {
+        const query = 'SELECT * FROM middleman_requests WHERE status = ? ORDER BY created_at ASC';
+        
+        try {
+            return this.db!.prepare(query).all(['pending']) as MiddlemanRequestRecord[];
+        } catch (error) {
+            console.error('Error getting pending middleman requests:', error);
+            throw error;
+        }
+    }
+
+    async getActiveMiddlemanTransactions(middlemanId?: string): Promise<MiddlemanTransactionRecord[]> {
+        let query = 'SELECT * FROM middleman_transactions WHERE status = ?';
+        let params: any[] = ['active'];
+
+        if (middlemanId) {
+            query += ' AND middleman_id = ?';
+            params.push(middlemanId);
+        }
+
+        query += ' ORDER BY created_at ASC';
+
+        try {
+            return this.db!.prepare(query).all(params) as MiddlemanTransactionRecord[];
+        } catch (error) {
+            console.error('Error getting active middleman transactions:', error);
+            throw error;
+        }
     }
 
     isHealthy(): boolean {

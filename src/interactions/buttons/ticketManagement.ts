@@ -577,42 +577,29 @@ async function showReviewPrompt(interaction: ButtonInteraction, ticket: any): Pr
         new ButtonBuilder()
             .setCustomId(`close_review_1_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
             .setLabel('1 ⭐')
-            .setEmoji('😞')
             .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
             .setCustomId(`close_review_2_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
             .setLabel('2 ⭐')
-            .setEmoji('😐')
             .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
             .setCustomId(`close_review_3_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
             .setLabel('3 ⭐')
-            .setEmoji('🙂')
             .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
             .setCustomId(`close_review_4_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
             .setLabel('4 ⭐')
-            .setEmoji('😊')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId(`close_review_5_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
             .setLabel('5 ⭐')
-            .setEmoji('😍')
             .setStyle(ButtonStyle.Success)
-    ]);
-
-    const skipRow = new ActionRowBuilder<ButtonBuilder>().addComponents([
-        new ButtonBuilder()
-            .setCustomId(`close_skip_review_${ticket.ticket_number}`)
-            .setLabel('Skip Review & Close Ticket')
-            .setEmoji('⏭️')
-            .setStyle(ButtonStyle.Secondary)
     ]);
 
     await interaction.reply({
         content: "## 🌟 How was your support experience?",
         embeds: [reviewEmbed],
-        components: [reviewRow, skipRow],
+        components: [reviewRow],
         ephemeral: false
     });
 }

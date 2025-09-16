@@ -344,6 +344,29 @@ class BotLogger {
         });
     }
 
+    async logMiddlemanRequestCreated(ticketNumber: string, userId: string, game: string, tradeValue: string): Promise<void> {
+        await this.info('Middleman Request Created', 'New middleman service request submitted', {
+            userId,
+            fields: [
+                {
+                    name: '🛡️ Request Number',
+                    value: `#${ticketNumber}`,
+                    inline: true
+                },
+                {
+                    name: '🎮 Game',
+                    value: game.toUpperCase(),
+                    inline: true
+                },
+                {
+                    name: '💰 Trade Value',
+                    value: tradeValue,
+                    inline: true
+                }
+            ]
+        });
+    }
+
     async logTicketClaimed(ticketNumber: string, helperId: string, userId: string): Promise<void> {
         await this.info('Ticket Claimed', `Ticket has been claimed by a helper`, {
             userId,

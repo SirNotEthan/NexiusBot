@@ -7,6 +7,9 @@ export const once = false;
 export async function execute(message: Message): Promise<void> {
     if (message.author.bot || !message.guild) return;
     
+    // Only respond in the designated chat channel
+    if (message.channel.id !== process.env.CHAT_CHANNEL_ID) return;
+    
     const YOUR_USER_ID = process.env.YOUR_USER_ID 
     if (message.mentions.users.has(message.client.user?.id || '') && 
         message.content.toLowerCase().includes('hi')) {
