@@ -24,7 +24,6 @@ const data = new SlashCommandBuilder()
     );
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    // Security check - only allow specific user IDs (bot owners)
     const ALLOWED_USERS = process.env.BOT_OWNER_IDS?.split(',') || [];
     
     if (!ALLOWED_USERS.includes(interaction.user.id)) {
@@ -38,7 +37,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     const code = interaction.options.getString('code', true);
     const ephemeral = interaction.options.getBoolean('ephemeral') ?? true;
 
-    // Security checks for dangerous operations
     const dangerousPatterns = [
         /process\.exit/i,
         /require\s*\(\s*['"`]fs['"`]\s*\)/i,
