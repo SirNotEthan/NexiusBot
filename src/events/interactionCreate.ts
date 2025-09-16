@@ -1,4 +1,5 @@
 import { Client, ChatInputCommandInteraction, SlashCommandBuilder, ButtonInteraction, StringSelectMenuInteraction, ModalSubmitInteraction, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
+import { FREE_CARRIES_CONFIG, getGameDisplayName } from '../config/freeCarriesConfig';
 import type { Interaction } from 'discord.js';
 import { botLogger } from '../utils/logger';
 import { isInteractionValid } from '../utils/interactionUtils';
@@ -245,6 +246,11 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
         return;
     }
     
+    if (interaction.customId === 'service_info_game_select') {
+        await handleServiceInfoGameSelection(interaction);
+        return;
+    }
+    
     if (interaction.customId.startsWith('paid_helper_select_')) {
         await handlePaidHelperSelection(interaction);
     }
@@ -453,6 +459,71 @@ async function sendErrorResponse(
         }
     } catch (error) {
         console.error('Failed to send error response:', error);
+    }
+}
+
+async function handleServiceInfoGameSelection(interaction: StringSelectMenuInteraction): Promise<void> {
+    try {
+        const selectedGame = interaction.values[0];
+        const gameConfig = FREE_CARRIES_CONFIG[selectedGame];
+        
+        if (!gameConfig) {
+            await interaction.reply({
+                content: "❌ Invalid game selection. Please try again.",
+                ephemeral: true
+            });
+            return;
+        }
+
+        const gameName = getGameDisplayName(selectedGame);
+        const gameEmoji = selectedGame === 'als' ? '⚔️' : '🛡️';
+        
+        // Create formatted limit display
+        const limitEntries = Object.entries(gameConfig.gameLimits).map(([gamemode, limit]) => {
+            const formattedGamemode = gamemode.split('-').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ');
+            return `• **${formattedGamemode}:** ${limit} carries/day`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle(`${gameEmoji} ${gameName} - Free Carry Limits`)
+            .setDescription(`**Daily free carry limits for ${gameName}**\n\nThese limits reset every day at midnight UTC. You must have at least 50 messages in the server today to be eligible.`)
+            .setColor(selectedGame === 'als' ? 0xff6b6b : 0x5865f2)
+            .addFields([
+                {
+                    name: '📊 **Carry Limits per Gamemode**',
+                    value: limitEntries.join('\n'),
+                    inline: false
+                },
+                {
+                    name: '📋 **Requirements**',
+                    value: '• At least 50 messages in the server today\n• One request per gamemode at a time\n• Respect helper availability',
+                    inline: false
+                },
+                {
+                    name: '💡 **Tips**',
+                    value: '• Limits are per gamemode, not total\n• Use different gamemodes if one reaches limit\n• Consider Paid Help for unlimited requests',
+                    inline: false
+                }
+            ])
+            .setFooter({ 
+                text: `Limits reset daily at midnight UTC • Use /request-carry to get started`,
+                iconURL: interaction.client.user?.displayAvatarURL()
+            })
+            .setTimestamp();
+
+        await interaction.reply({
+            embeds: [embed],
+            ephemeral: true
+        });
+
+    } catch (error) {
+        console.error('Error handling service info game selection:', error);
+        await interaction.reply({
+            content: "❌ An error occurred while fetching game information. Please try again.",
+            ephemeral: true
+        });
     }
 }
 

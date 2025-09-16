@@ -6,9 +6,12 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    AttachmentBuilder
+    AttachmentBuilder,
+    StringSelectMenuBuilder,
+    StringSelectMenuOptionBuilder
 } from 'discord.js';
 import Database from '../../database/database';
+import { FREE_CARRIES_CONFIG, getGameDisplayName } from '../../config/freeCarriesConfig';
 
 const data = new SlashCommandBuilder()
     .setName('embed')
@@ -20,7 +23,8 @@ const data = new SlashCommandBuilder()
         .setRequired(true)
         .addChoices(
             { name: 'Carry Request', value: 'carry-request'},
-            { name: 'Middleman Terms', value: 'middleman-terms'}
+            { name: 'Middleman Terms', value: 'middleman-terms'},
+            { name: 'Service Info', value: 'service-info'}
         )
     );
 
@@ -32,6 +36,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
             await sendCarryRequestEmbed(interaction);
         } else if (embedType === 'middleman-terms') {
             await sendMiddlemanTermsEmbed(interaction);
+        } else if (embedType === 'service-info') {
+            await sendServiceInfoEmbed(interaction);
         }
     } catch (error) {
         console.error("Error in embed command:", error);
@@ -152,6 +158,58 @@ async function sendMiddlemanTermsEmbed(interaction: ChatInputCommandInteraction)
     await interaction.reply({
         embeds: [embed],
         components: [buttons]
+    });
+}
+
+async function sendServiceInfoEmbed(interaction: ChatInputCommandInteraction): Promise<void> {
+    const embed = new EmbedBuilder()
+        .setTitle('📊 Service Information')
+        .setDescription('**Learn about our carry service limits and requirements**\n\nSelect a game below to view detailed information about free carry limits for each gamemode.')
+        .setColor(0x5865f2)
+        .addFields([
+            {
+                name: '🎮 **Available Games**',
+                value: '• **Anime Last Stand (ALS)**\n• **Anime Vanguards (AV)**',
+                inline: false
+            },
+            {
+                name: '📋 **General Requirements**',
+                value: '• At least 50 messages in the server today\n• Stay within daily limits for each gamemode\n• Limits reset daily at midnight UTC',
+                inline: false
+            },
+            {
+                name: '💡 **How It Works**',
+                value: '• Free carries are limited per gamemode per day\n• Different gamemodes have different limits\n• Use the dropdown below to see specific limits',
+                inline: false
+            }
+        ])
+        .setFooter({ 
+            text: 'Select a game below to view detailed carry limits',
+            iconURL: interaction.client.user?.displayAvatarURL()
+        })
+        .setTimestamp();
+
+    const gameSelectMenu = new StringSelectMenuBuilder()
+        .setCustomId('service_info_game_select')
+        .setPlaceholder('Select a game to view carry limits...')
+        .addOptions([
+            new StringSelectMenuOptionBuilder()
+                .setLabel('Anime Last Stand (ALS)')
+                .setDescription('View free carry limits for ALS gamemodes')
+                .setValue('als')
+                .setEmoji('⚔️'),
+            new StringSelectMenuOptionBuilder()
+                .setLabel('Anime Vanguards (AV)')
+                .setDescription('View free carry limits for AV gamemodes')
+                .setValue('av')
+                .setEmoji('🛡️')
+        ]);
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(gameSelectMenu);
+
+    await interaction.reply({
+        embeds: [embed],
+        components: [row]
     });
 }
 

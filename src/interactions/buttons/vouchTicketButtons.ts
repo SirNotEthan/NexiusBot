@@ -143,6 +143,9 @@ export async function handleVouchTicketButtons(interaction: ButtonInteraction): 
                     await interaction.reply({ embeds: [embed], ephemeral: true });
                     return;
                 }
+                
+                // Set a flag to indicate we need to do atomic increment later
+                ticketData.needsAtomicIncrement = true;
             }
             
             await createAndShowVouchTicket(interaction, ticketData);

@@ -47,6 +47,7 @@ interface VouchTicketData {
     canJoinLinks?: boolean;
     type: 'regular' | 'paid';
     selectedHelper?: string;
+    needsAtomicIncrement?: boolean;
 }
 
 const data = new SlashCommandBuilder()
@@ -76,33 +77,42 @@ async function checkFreeCarryEligibility(userId: string, game: string, gamemode:
     await db.connect();
     
     try {
+        console.log(`[FREE_CARRY_CHECK] Checking eligibility for user ${userId}, game ${game}, gamemode ${gamemode}`);
+        
         const messageStats = await db.getUserMessageStats(userId);
         
         if (!messageStats) {
+            console.log(`[FREE_CARRY_CHECK] No message stats found for user ${userId}`);
             return { eligible: false, reason: 'No message activity found today' };
         }
         
         const hasEnoughMessages = messageStats.message_count >= 50;
         if (!hasEnoughMessages) {
+            console.log(`[FREE_CARRY_CHECK] User ${userId} has insufficient messages: ${messageStats.message_count}/50`);
             return { eligible: false, reason: `Need at least 50 messages today (currently ${messageStats.message_count})` };
         }
         
         const gamemodeLimit = getFreeCarryLimit(game, gamemode);
         if (gamemodeLimit === 0) {
+            console.log(`[FREE_CARRY_CHECK] Gamemode ${gamemode} for game ${game} does not support free carries`);
             return { eligible: false, reason: 'This gamemode does not support free carries' };
         }
         
         const usage = await db.getFreeCarryUsage(userId, game, gamemode);
         const currentUsage = usage ? usage.usage_count : 0;
+        console.log(`[FREE_CARRY_CHECK] User ${userId} current usage for ${game}/${gamemode}: ${currentUsage}/${gamemodeLimit}`);
         
         const hasRequestsRemaining = currentUsage < gamemodeLimit;
         
-        return { 
+        const result = { 
             eligible: hasRequestsRemaining,
-            reason: hasRequestsRemaining ? undefined : `Daily limit reached for this gamemode`,
+            reason: hasRequestsRemaining ? undefined : `Daily limit reached for this gamemode (${currentUsage}/${gamemodeLimit})`,
             limit: gamemodeLimit,
             used: currentUsage
         };
+        
+        console.log(`[FREE_CARRY_CHECK] Eligibility result for user ${userId}: ${JSON.stringify(result)}`);
+        return result;
     } finally {
         await db.close();
     }
@@ -439,7 +449,21 @@ export async function createVouchTicket(
         await botLogger.logTicketCreated(ticketNumber, userId, ticketData.type, ticketData.game!);
 
         if (ticketData.type === 'regular') {
-            await db.incrementFreeCarryUsage(userId, userTag, ticketData.game!, ticketData.gamemode!);
+            if (ticketData.needsAtomicIncrement) {
+                // Use atomic increment to prevent race conditions
+                const gamemodeLimit = getFreeCarryLimit(ticketData.game!, ticketData.gamemode!);
+                const incrementResult = await db.tryIncrementFreeCarryUsage(userId, userTag, ticketData.game!, ticketData.gamemode!, gamemodeLimit);
+                
+                if (!incrementResult.success) {
+                    console.error(`[RACE_CONDITION] Failed to atomically increment usage for user ${userId}, game ${ticketData.game}, gamemode ${ticketData.gamemode}. Current usage: ${incrementResult.currentUsage}/${gamemodeLimit}`);
+                    throw new Error(`Free carry limit reached during ticket creation. Current usage: ${incrementResult.currentUsage}/${gamemodeLimit}`);
+                }
+                
+                console.log(`[ATOMIC_INCREMENT] Successfully incremented usage for user ${userId}, game ${ticketData.game}, gamemode ${ticketData.gamemode}. New usage: ${incrementResult.currentUsage}/${gamemodeLimit}`);
+            } else {
+                // Fallback to regular increment for backward compatibility
+                await db.incrementFreeCarryUsage(userId, userTag, ticketData.game!, ticketData.gamemode!);
+            }
             await db.incrementFreeCarryRequests(userId);
         }
 

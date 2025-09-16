@@ -1022,8 +1022,54 @@ class DatabaseManager extends EventEmitter {
 
         try {
             this.db!.prepare(query).run([userId, userTag, game, gamemode, today, now, now, userTag, now]);
+            console.log(`[DB] Incremented free carry usage for user ${userId}, game ${game}, gamemode ${gamemode}`);
         } catch (error) {
             console.error('Error incrementing free carry usage:', error);
+            throw error;
+        }
+    }
+
+    async tryIncrementFreeCarryUsage(userId: string, userTag: string, game: string, gamemode: string, limit: number): Promise<{success: boolean, currentUsage: number}> {
+        const today = new Date().toISOString().split('T')[0];
+        const now = Date.now();
+
+        try {
+            // First, get current usage
+            const currentUsage = await this.getFreeCarryUsage(userId, game, gamemode);
+            const current = currentUsage ? currentUsage.usage_count : 0;
+            
+            // Check if incrementing would exceed limit
+            if (current >= limit) {
+                console.log(`[DB] Free carry limit would be exceeded for user ${userId}, game ${game}, gamemode ${gamemode}: ${current}/${limit}`);
+                return {success: false, currentUsage: current};
+            }
+
+            // Atomically increment usage
+            const query = `
+                INSERT INTO free_carry_usage (user_id, user_tag, game, gamemode, date, usage_count, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+                ON CONFLICT(user_id, game, gamemode, date) 
+                DO UPDATE SET 
+                    usage_count = CASE 
+                        WHEN usage_count < ? THEN usage_count + 1 
+                        ELSE usage_count 
+                    END,
+                    user_tag = ?,
+                    updated_at = ?
+            `;
+
+            const result = this.db!.prepare(query).run([userId, userTag, game, gamemode, today, now, now, limit, userTag, now]);
+            
+            // Get updated usage to verify
+            const updatedUsage = await this.getFreeCarryUsage(userId, game, gamemode);
+            const newUsage = updatedUsage ? updatedUsage.usage_count : 0;
+            
+            const success = newUsage > current;
+            console.log(`[DB] Atomic increment attempt for user ${userId}, game ${game}, gamemode ${gamemode}: ${current} -> ${newUsage}, success: ${success}`);
+            
+            return {success, currentUsage: newUsage};
+        } catch (error) {
+            console.error('Error in atomic free carry usage increment:', error);
             throw error;
         }
     }

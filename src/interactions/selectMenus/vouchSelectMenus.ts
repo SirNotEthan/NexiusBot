@@ -87,14 +87,5 @@ export async function handleVouchRatingSelection(interaction: StringSelectMenuIn
 }
 
 async function updateVouchTicketEmbed(interaction: any, ticketData: VouchTicketData): Promise<void> {
-    const { createVouchTicketEmbed, createVouchTicketComponents } = require('../../commands/vouch/request-carry');
-    
-    const embed = createVouchTicketEmbed(ticketData);
-    const components = createVouchTicketComponents(ticketData, interaction.user.id);
-
-    await interaction.deferUpdate();
-    await interaction.editReply({
-        embeds: [embed],
-        components: components
-    });
+    await showTicketForm(interaction, ticketData);
 }
