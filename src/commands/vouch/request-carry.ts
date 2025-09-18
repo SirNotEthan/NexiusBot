@@ -309,7 +309,12 @@ function createVouchTicketComponents(ticketData: VouchTicketData, userId: string
                 { label: 'Rift', value: 'rift' },
                 { label: 'Inf', value: 'inf' },
                 { label: 'Raids', value: 'raids' },
-                { label: 'SJW Dungeon', value: 'sjw-dungeon' }
+                { label: 'SJW Dungeon', value: 'sjw-dungeon' },
+                { label: 'Dungeons', value: 'dungeons' },
+                { label: 'Portals', value: 'portals' },
+                { label: 'Void', value: 'void' },
+                { label: 'Towers', value: 'towers' },
+                { label: 'Events', value: 'events' }
             ];
         } else if (game === 'als') {
             return [

@@ -16,7 +16,12 @@ export const FREE_CARRIES_CONFIG: Record<string, GameConfig> = {
             'rift': 1,
             'inf': 1,
             'raids': 2,
-            'sjw-dungeon': 1
+            'sjw-dungeon': 1,
+            'dungeons': 2,
+            'portals': 1,
+            'void': 1,
+            'towers': 1,
+            'events': 1
         }
     },
     'als': {
