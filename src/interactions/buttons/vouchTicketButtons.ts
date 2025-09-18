@@ -5,42 +5,6 @@ import Database from '../../database/database';
 import { getFreeCarryLimit } from '../../config/freeCarriesConfig';
 import { safeReply, safeEditReply, safeDeferUpdate, isInteractionValid } from '../../utils/interactionUtils';
 
-async function checkFreeCarryEligibility(userId: string, game: string, gamemode: string): Promise<{eligible: boolean, reason?: string, limit?: number, used?: number}> {
-    const db = new Database();
-    await db.connect();
-    
-    try {
-        const messageStats = await db.getUserMessageStats(userId);
-        
-        if (!messageStats) {
-            return { eligible: false, reason: 'No message activity found today' };
-        }
-        
-        const hasEnoughMessages = messageStats.message_count >= 50;
-        if (!hasEnoughMessages) {
-            return { eligible: false, reason: `Need at least 50 messages today (currently ${messageStats.message_count})` };
-        }
-        
-        const gamemodeLimit = getFreeCarryLimit(game, gamemode);
-        if (gamemodeLimit === 0) {
-            return { eligible: false, reason: 'This gamemode does not support free carries' };
-        }
-        
-        const usage = await db.getFreeCarryUsage(userId, game, gamemode);
-        const currentUsage = usage ? usage.usage_count : 0;
-        
-        const hasRequestsRemaining = currentUsage < gamemodeLimit;
-        
-        return { 
-            eligible: hasRequestsRemaining,
-            reason: hasRequestsRemaining ? undefined : `Daily limit reached for this gamemode (${currentUsage}/${gamemodeLimit})`,
-            limit: gamemodeLimit,
-            used: currentUsage
-        };
-    } finally {
-        await db.close();
-    }
-}
 
 export async function handleVouchTicketButtons(interaction: ButtonInteraction): Promise<void> {
     const customIdParts = interaction.customId.split('_');
@@ -126,26 +90,62 @@ export async function handleVouchTicketButtons(interaction: ButtonInteraction): 
             }
             
             if (ticketData.type === 'regular') {
-                const eligibility = await checkFreeCarryEligibility(interaction.user.id, ticketData.game, ticketData.gamemode);
-                if (!eligibility.eligible) {
-                    const embed = new EmbedBuilder()
-                        .setTitle("❌ Free Carry Limit Reached")
-                        .setDescription(`**${eligibility.reason}**\n\nTo create more carry requests for this gamemode today, you need to meet the requirements below.`)
-                        .setColor(0xff6b6b)
-                        .addFields([
-                            { name: "📝 Requirements for Free Carries", value: "• At least 50 messages in the server today\n• Stay within the daily limits for each gamemode", inline: false },
-                            { name: "📊 Your Current Usage", value: eligibility.limit !== undefined ? `**${ticketData.gamemode}:** ${eligibility.used}/${eligibility.limit} carries used today` : "No usage data available", inline: false },
-                            { name: "💡 Alternatives", value: "• Use **Paid Help** instead\n• Try a different gamemode\n• Wait until tomorrow for your limits to reset", inline: false }
-                        ])
-                        .setFooter({ text: "Limits reset daily at midnight UTC" })
-                        .setTimestamp();
-                    
-                    await interaction.reply({ embeds: [embed], ephemeral: true });
-                    return;
-                }
+                const db = new Database();
+                await db.connect();
                 
-                // Set a flag to indicate we need to do atomic increment later
-                ticketData.needsAtomicIncrement = true;
+                try {
+                    // Use atomic check-and-reserve operation
+                    const eligibility = await db.checkAndReserveFreeCarrySlot(interaction.user.id, interaction.user.tag, ticketData.game, ticketData.gamemode);
+                    
+                    if (!eligibility.eligible) {
+                        const isLimitReached = eligibility.reason?.includes('Daily limit reached');
+                        const isGamemodeNotSupported = eligibility.reason?.includes('does not support free carries');
+                        const isInsufficientMessages = eligibility.reason?.includes('Need at least 50 messages');
+                        const isNoActivity = eligibility.reason?.includes('No message activity');
+
+                        let title = "❌ Free Carry Request Failed";
+                        let description = `**${eligibility.reason}**`;
+                        
+                        if (isLimitReached) {
+                            title = "❌ Free Carry Limit Reached";
+                            description += `\n\nYou've reached your daily limit for this gamemode. You can try again tomorrow.`;
+                        } else if (isGamemodeNotSupported) {
+                            title = "❌ Gamemode Not Supported";
+                            description += `\n\nThis gamemode doesn't offer free carries.`;
+                        } else if (isInsufficientMessages || isNoActivity) {
+                            title = "❌ Message Requirement Not Met";
+                            description += `\n\nYou need to be more active in the server to request free carries.`;
+                        }
+
+                        const embed = new EmbedBuilder()
+                            .setTitle(title)
+                            .setDescription(description)
+                            .setColor(0xff6b6b);
+
+                        if (isLimitReached || isInsufficientMessages || isNoActivity) {
+                            embed.addFields([
+                                { name: "📝 Requirements for Free Carries", value: "• At least 50 messages in the server today\n• Stay within the daily limits for each gamemode", inline: false },
+                                { name: "📊 Your Current Usage", value: eligibility.limit !== undefined ? `**${ticketData.gamemode}:** ${eligibility.used}/${eligibility.limit} carries used today` : "No usage data available", inline: false },
+                                { name: "💡 Alternatives", value: "• Use **Paid Help** instead\n• Try a different gamemode\n• Wait until tomorrow for your limits to reset", inline: false }
+                            ])
+                            .setFooter({ text: "Limits reset daily at midnight UTC" });
+                        } else if (isGamemodeNotSupported) {
+                            embed.addFields([
+                                { name: "💡 Alternatives", value: "• Use **Paid Help** instead\n• Try a different gamemode that supports free carries\n• Check the supported gamemodes list", inline: false }
+                            ]);
+                        }
+
+                        embed.setTimestamp();
+                        
+                        await interaction.reply({ embeds: [embed], ephemeral: true });
+                        return;
+                    }
+                    
+                    // Slot successfully reserved - no need for further checks
+                    ticketData.slotReserved = true;
+                } finally {
+                    await db.close();
+                }
             }
             
             await createAndShowVouchTicket(interaction, ticketData);
@@ -202,6 +202,20 @@ async function createAndShowVouchTicket(interaction: ButtonInteraction, ticketDa
 
     } catch (error) {
         console.error('Error creating carry request:', error);
+        
+        // Release reserved slot if ticket creation failed
+        if (ticketData.type === 'regular' && ticketData.slotReserved && ticketData.game && ticketData.gamemode) {
+            try {
+                const db = new Database();
+                await db.connect();
+                await db.releaseReservedFreeCarrySlot(interaction.user.id, ticketData.game, ticketData.gamemode);
+                await db.close();
+                console.log(`[ROLLBACK] Released reserved slot for user ${interaction.user.id} due to ticket creation failure`);
+            } catch (rollbackError) {
+                console.error('Error releasing reserved slot during rollback:', rollbackError);
+            }
+        }
+        
         if (isInteractionValid(interaction)) {
             await safeReply(interaction, { content: "❌ Failed to create carry request. Please try again.", ephemeral: true });
         }

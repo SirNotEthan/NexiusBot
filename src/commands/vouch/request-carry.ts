@@ -48,6 +48,7 @@ interface VouchTicketData {
     type: 'regular' | 'paid';
     selectedHelper?: string;
     needsAtomicIncrement?: boolean;
+    slotReserved?: boolean;
 }
 
 const data = new SlashCommandBuilder()
@@ -449,8 +450,11 @@ export async function createVouchTicket(
         await botLogger.logTicketCreated(ticketNumber, userId, ticketData.type, ticketData.game!);
 
         if (ticketData.type === 'regular') {
-            if (ticketData.needsAtomicIncrement) {
-                // Use atomic increment to prevent race conditions
+            if (ticketData.slotReserved) {
+                // Slot already atomically reserved in button handler - no further action needed
+                console.log(`[TICKET_CREATE] Slot already reserved for user ${userId}, game ${ticketData.game}, gamemode ${ticketData.gamemode}`);
+            } else if (ticketData.needsAtomicIncrement) {
+                // Legacy path: Use atomic increment to prevent race conditions
                 const gamemodeLimit = getFreeCarryLimit(ticketData.game!, ticketData.gamemode!);
                 const incrementResult = await db.tryIncrementFreeCarryUsage(userId, userTag, ticketData.game!, ticketData.gamemode!, gamemodeLimit);
                 

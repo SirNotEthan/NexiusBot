@@ -1034,17 +1034,7 @@ class DatabaseManager extends EventEmitter {
         const now = Date.now();
 
         try {
-            // First, get current usage
-            const currentUsage = await this.getFreeCarryUsage(userId, game, gamemode);
-            const current = currentUsage ? currentUsage.usage_count : 0;
-            
-            // Check if incrementing would exceed limit
-            if (current >= limit) {
-                console.log(`[DB] Free carry limit would be exceeded for user ${userId}, game ${game}, gamemode ${gamemode}: ${current}/${limit}`);
-                return {success: false, currentUsage: current};
-            }
-
-            // Atomically increment usage
+            // Pure atomic operation - no separate checks
             const query = `
                 INSERT INTO free_carry_usage (user_id, user_tag, game, gamemode, date, usage_count, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, 1, ?, ?)
@@ -1056,20 +1046,104 @@ class DatabaseManager extends EventEmitter {
                     END,
                     user_tag = ?,
                     updated_at = ?
+                RETURNING usage_count
             `;
 
-            const result = this.db!.prepare(query).run([userId, userTag, game, gamemode, today, now, now, limit, userTag, now]);
+            const result = this.db!.prepare(query).get([userId, userTag, game, gamemode, today, now, now, limit, userTag, now]) as {usage_count: number} | undefined;
             
-            // Get updated usage to verify
-            const updatedUsage = await this.getFreeCarryUsage(userId, game, gamemode);
-            const newUsage = updatedUsage ? updatedUsage.usage_count : 0;
+            if (!result) {
+                console.error(`[DB] Failed to get result from atomic increment for user ${userId}, game ${game}, gamemode ${gamemode}`);
+                return {success: false, currentUsage: 0};
+            }
+
+            const newUsage = result.usage_count;
+            const success = newUsage <= limit;
             
-            const success = newUsage > current;
-            console.log(`[DB] Atomic increment attempt for user ${userId}, game ${game}, gamemode ${gamemode}: ${current} -> ${newUsage}, success: ${success}`);
+            console.log(`[DB] Atomic increment for user ${userId}, game ${game}, gamemode ${gamemode}: ${newUsage}/${limit}, success: ${success}`);
             
             return {success, currentUsage: newUsage};
         } catch (error) {
             console.error('Error in atomic free carry usage increment:', error);
+            throw error;
+        }
+    }
+
+    async checkAndReserveFreeCarrySlot(userId: string, userTag: string, game: string, gamemode: string): Promise<{eligible: boolean, reason?: string, limit?: number, used?: number}> {
+        if (!this.isConnected) throw new Error('Database not connected');
+
+        try {
+            console.log(`[FREE_CARRY_RESERVE] Checking and reserving slot for user ${userId}, game ${game}, gamemode ${gamemode}`);
+            
+            const messageStats = await this.getUserMessageStats(userId);
+            
+            if (!messageStats) {
+                console.log(`[FREE_CARRY_RESERVE] No message stats found for user ${userId}`);
+                return { eligible: false, reason: 'No message activity found today' };
+            }
+            
+            const hasEnoughMessages = messageStats.message_count >= 50;
+            if (!hasEnoughMessages) {
+                console.log(`[FREE_CARRY_RESERVE] User ${userId} has insufficient messages: ${messageStats.message_count}/50`);
+                return { eligible: false, reason: `Need at least 50 messages today (currently ${messageStats.message_count})` };
+            }
+            
+            const { getFreeCarryLimit } = require('../config/freeCarriesConfig');
+            const gamemodeLimit = getFreeCarryLimit(game, gamemode);
+            if (gamemodeLimit === 0) {
+                console.log(`[FREE_CARRY_RESERVE] Gamemode ${gamemode} for game ${game} does not support free carries`);
+                return { eligible: false, reason: 'This gamemode does not support free carries' };
+            }
+            
+            // Atomically try to reserve a slot
+            const reserveResult = await this.tryIncrementFreeCarryUsage(userId, userTag, game, gamemode, gamemodeLimit);
+            
+            if (!reserveResult.success) {
+                console.log(`[FREE_CARRY_RESERVE] Failed to reserve slot for user ${userId}: ${reserveResult.currentUsage}/${gamemodeLimit}`);
+                return { 
+                    eligible: false, 
+                    reason: `Daily limit reached for this gamemode (${reserveResult.currentUsage}/${gamemodeLimit})`,
+                    limit: gamemodeLimit,
+                    used: reserveResult.currentUsage
+                };
+            }
+            
+            console.log(`[FREE_CARRY_RESERVE] Successfully reserved slot for user ${userId}: ${reserveResult.currentUsage}/${gamemodeLimit}`);
+            return { 
+                eligible: true,
+                limit: gamemodeLimit,
+                used: reserveResult.currentUsage
+            };
+        } catch (error) {
+            console.error('Error in checkAndReserveFreeCarrySlot:', error);
+            throw error;
+        }
+    }
+
+    async releaseReservedFreeCarrySlot(userId: string, game: string, gamemode: string): Promise<void> {
+        if (!this.isConnected) throw new Error('Database not connected');
+
+        const today = new Date().toISOString().split('T')[0];
+        const now = Date.now();
+
+        try {
+            console.log(`[FREE_CARRY_RELEASE] Releasing reserved slot for user ${userId}, game ${game}, gamemode ${gamemode}`);
+            
+            const query = `
+                UPDATE free_carry_usage 
+                SET usage_count = CASE 
+                    WHEN usage_count > 0 THEN usage_count - 1 
+                    ELSE 0 
+                END,
+                updated_at = ?
+                WHERE user_id = ? AND game = ? AND gamemode = ? AND date = ?
+            `;
+
+            const stmt = this.db!.prepare(query);
+            const result = stmt.run([now, userId, game, gamemode, today]);
+            
+            console.log(`[FREE_CARRY_RELEASE] Released slot for user ${userId}, changes: ${result.changes}`);
+        } catch (error) {
+            console.error('Error releasing reserved free carry slot:', error);
             throw error;
         }
     }
