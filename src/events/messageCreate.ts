@@ -7,8 +7,38 @@ export const once = false;
 export async function execute(message: Message): Promise<void> {
     if (message.author.bot || !message.guild) return;
     
-    // Only respond in the designated chat channel
-    if (message.channel.id !== process.env.CHAT_CHANNEL_ID) return;
+    // Don't track messages in ticket categories to prevent farming
+    const ticketCategoryIds = [
+        process.env.TICKETS_CATEGORY_ID,
+        process.env.PAID_TICKETS_CATEGORY_ID,
+        process.env.ALS_REGULAR_CATEGORY_ID,
+        process.env.ALS_PAID_CATEGORY_ID,
+        process.env.AV_REGULAR_CATEGORY_ID,
+        process.env.AV_PAID_CATEGORY_ID
+    ].filter(Boolean);
+    
+    const channel = message.channel;
+    const isTicketChannel = channel.type === 0 && ticketCategoryIds.includes(channel.parentId || '');
+    
+    // Track user messages from all channels except ticket channels
+    const isInChatChannel = message.channel.id === process.env.CHAT_CHANNEL_ID;
+    
+    if (!isInChatChannel) {
+        // Track the message but don't respond to mentions (unless it's a ticket channel)
+        if (!isTicketChannel) {
+            const db = new Database();
+            
+            try {
+                await db.connect();
+                await db.incrementUserMessages(message.author.id, message.author.tag);
+            } catch (error) {
+                console.error('Error tracking user message:', error);
+            } finally {
+                await db.close();
+            }
+        }
+        return;
+    }
     
     const YOUR_USER_ID = process.env.YOUR_USER_ID 
     if (message.mentions.users.has(message.client.user?.id || '') && 
@@ -44,14 +74,17 @@ export async function execute(message: Message): Promise<void> {
         return;
     }
     
-    const db = new Database();
-    
-    try {
-        await db.connect();
-        await db.incrementUserMessages(message.author.id, message.author.tag);
-    } catch (error) {
-        console.error('Error tracking user message:', error);
-    } finally {
-        await db.close();
+    // Track message in chat channel too (if not a ticket channel)
+    if (!isTicketChannel) {
+        const db = new Database();
+        
+        try {
+            await db.connect();
+            await db.incrementUserMessages(message.author.id, message.author.tag);
+        } catch (error) {
+            console.error('Error tracking user message:', error);
+        } finally {
+            await db.close();
+        }
     }
 }
