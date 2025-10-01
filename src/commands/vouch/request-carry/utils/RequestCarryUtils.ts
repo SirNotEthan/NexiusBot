@@ -169,7 +169,7 @@ export class RequestCarryUtils {
 
         // Add ticket header section
         const headerSection = new TextDisplayBuilder()
-            .setContent(`# 🎫 Carry Request #${ticketNumber}`);
+            .setContent(`# Ticket Created`);
         (ticketContainer as any).components.push(headerSection);
 
         // Add requester section
@@ -184,22 +184,22 @@ export class RequestCarryUtils {
 
         // Add game section
         const gameSection = new TextDisplayBuilder()
-            .setContent(`**Game:** \`\`${getGameDisplayName(data.game!)}\`\` `);
+            .setContent(`**Game:** \n \`\`\`${getGameDisplayName(data.game!)}\`\`\` `);
         (ticketContainer as any).components.push(gameSection);
 
         // Add gamemode section
         const gamemodeSection = new TextDisplayBuilder()
-            .setContent(`**Gamemode:** \`\`${data.gamemode}\`\``);
+            .setContent(`**Gamemode:** \n \`\`\`${data.gamemode}\`\`\``);
         (ticketContainer as any).components.push(gamemodeSection);
 
         // Add links section
         const linksSection = new TextDisplayBuilder()
-            .setContent(`**Can Join Links:** \`\`${data.canJoinLinks ? 'Yes' : 'No'}\`\` `);
+            .setContent(`**Can Join Links:** \n \`\`\`${data.canJoinLinks ? 'Yes' : 'No'}\`\`\` `);
         (ticketContainer as any).components.push(linksSection);
 
         // Add goal section
         const goalSection = new TextDisplayBuilder()
-            .setContent(`**Goal:** \`\`${data.goal}\`\` `);
+            .setContent(`**Goal:** \n \`\`\`${data.goal}\`\`\` `);
         (ticketContainer as any).components.push(goalSection);
 
         // Send the ticket information message using ContainerBuilder

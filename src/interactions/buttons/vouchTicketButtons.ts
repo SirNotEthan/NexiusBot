@@ -126,9 +126,15 @@ export async function handleVouchTicketButtons(interaction: ButtonInteraction): 
         case 'links':
             const linksValue = customIdParts[3] === 'yes';
             ticketData.canJoinLinks = linksValue;
+            // Clear helper data when user selects they can join links
+            if (linksValue) {
+                ticketData.robloxUsername = undefined;
+            }
             await updateVouchTicketEmbed(interaction, ticketData);
             break;
         case 'helper':
+            // Clear canJoinLinks when user selects to add helper
+            ticketData.canJoinLinks = false;
             const robloxModal = createRobloxUsernameModal(userId);
             await interaction.showModal(robloxModal);
             break;

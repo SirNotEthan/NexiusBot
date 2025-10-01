@@ -213,7 +213,7 @@ export class RequestCarryBuilder {
 
         return new StringSelectMenuBuilder()
             .setCustomId(`request_carry_gamemode_${this.userId}`)
-            .setPlaceholder('Select a gamemode...')
+            .setPlaceholder('Choose the gamemode you need help with')
             .addOptions(options.map(option => 
                 new StringSelectMenuOptionBuilder()
                     .setLabel(option.label)
@@ -234,7 +234,7 @@ export class RequestCarryBuilder {
             
             new ButtonBuilder()
                 .setCustomId(`request_carry_links_yes_${this.userId}`)
-                .setLabel('Can Join Voice/Links')
+                .setLabel('I can join links')
                 .setStyle(this.data.canJoinLinks === true ? ButtonStyle.Success : ButtonStyle.Secondary),
             
             new ButtonBuilder()

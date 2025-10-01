@@ -238,7 +238,7 @@ function createVouchTicketDisplay(ticketData: VouchTicketData): any[] {
 
     if (ticketData.robloxUsername) {
         const robloxSection = new TextDisplayBuilder()
-            .setContent(`**ROBLOX Username**\n\`\`${ticketData.robloxUsername}\`\``);
+            .setContent(`**ROBLOX Username**\n\`\`\`${ticketData.robloxUsername}\`\`\``);
         components.push(robloxSection);
     }
 
@@ -497,7 +497,7 @@ export async function createVouchTicket(
 
         if (ticketData.robloxUsername) {
             const robloxSection = new TextDisplayBuilder()
-                .setContent(`**ROBLOX Username:** \`${ticketData.robloxUsername}\``);
+                .setContent(`**ROBLOX Username:** \`\`\`${ticketData.robloxUsername}\`\`\``);
             (mainContainer as any).components.push(robloxSection);
         }
 

@@ -395,7 +395,7 @@ export class InteractionRouter {
             // Create game selection menu
             const gameSelectMenu = new StringSelectMenuBuilder()
                 .setCustomId(`carry_request_embed_game_select_${interaction.user.id}`)
-                .setPlaceholder('🎮 What game do you need help with?')
+                .setPlaceholder('Choose a game you need help in.')
                 .addOptions([
                     new StringSelectMenuOptionBuilder()
                         .setLabel('Anime Last Stand')
