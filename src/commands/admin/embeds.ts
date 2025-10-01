@@ -8,8 +8,16 @@ import {
     ButtonStyle,
     AttachmentBuilder,
     StringSelectMenuBuilder,
-    StringSelectMenuOptionBuilder
+    StringSelectMenuOptionBuilder,
+    MessageFlags,
+    TextDisplayBuilder,
+    SeparatorBuilder,
+    ContainerBuilder,
+    SeparatorSpacingSize,
+    MediaGalleryBuilder,
+    MediaGalleryItemBuilder
 } from 'discord.js';
+import path from 'path';
 import Database from '../../database/database';
 import { FREE_CARRIES_CONFIG, getGameDisplayName } from '../../config/freeCarriesConfig';
 
@@ -49,43 +57,53 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 }
 
 async function sendCarryRequestEmbed(interaction: ChatInputCommandInteraction): Promise<void> {
-    const attachment = new AttachmentBuilder('images/TicketEmbedImage.png', { name: 'ticket-embed-image.png' });
-    
-    const embed = new EmbedBuilder()
-        .setTitle('Carry Requests')
-        .setDescription('**Welcome to our carry service!**\n\nPlease note that we will only help you complete 5 runs for free for each ticket that you make.\n\nAlso boosters are able to bypass the message requirement.\n\nClick the button below to create a carry request ticket and get started!')
-        .setColor('LuminousVividPink')
-        .addFields([
-            {
-                name: ' ',
-                value: '————————————————————————————',
-                inline: false
-            },
-            {
-                name: 'Supported Games',
-                value: '**Anime Last Stand** (ALS)\n**Anime Vanguards** (AV)',
-                inline: false
-            },
-            {
-                name: ' ',
-                value: '————————————————————————————',
-                inline: false
-            }
-        ])
-        .setImage('attachment://ticket-embed-image.png')
+    const components = [];
+
+    const mainContainer = new ContainerBuilder().setAccentColor(0xFF10F0);
+    if (!(mainContainer as any).components) {
+        (mainContainer as any).components = [];
+    }
+
+    const headerText = new TextDisplayBuilder()
+        .setContent(`# Carry Requests\n**Welcome to our carry service!**\n\nPlease note that we will only help you complete 5 runs for free for each ticket that you make.\n\nAlso boosters are able to bypass the message requirement.\n\nClick the button below to create a carry request ticket and get started!`);
+    (mainContainer as any).components.push(headerText);
+
+    (mainContainer as any).components.push(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large));
+
+    const gamesText = new TextDisplayBuilder()
+        .setContent(`**Supported Games At The Moment Are:**\n**Anime Last Stand** (ALS)\n**Anime Vanguards** (AV)`);
+    (mainContainer as any).components.push(gamesText);
+
+    (mainContainer as any).components.push(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large));
+
+    const imageAttachment = new AttachmentBuilder(
+        path.join(process.cwd(), 'images', 'TicketEmbedImage.png'),
+        { name: 'TicketEmbedImage.png' }
+    );
+
+    const thumbnail = new MediaGalleryBuilder()
+        .addItems(
+            new MediaGalleryItemBuilder()
+                .setURL('attachment://TicketEmbedImage.png')
+                .setDescription('Ticket Embed Image')
+        );
+    (mainContainer as any).components.push(thumbnail);
+
+    components.push(mainContainer);
 
     const button = new ButtonBuilder()
-        .setCustomId('carry_request_embed_button')
+        .setCustomId('carry_request_embed_v2')
         .setLabel('Request Carry')
         .setEmoji('🎫')
         .setStyle(ButtonStyle.Primary);
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+    components.push(buttonRow);
 
     await interaction.reply({
-        embeds: [embed],
-        components: [row],
-        files: [attachment]
+        components,
+        files: [imageAttachment],
+        flags: MessageFlags.IsComponentsV2
     });
 }
 
@@ -208,6 +226,28 @@ async function sendServiceInfoEmbed(interaction: ChatInputCommandInteraction): P
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(gameSelectMenu);
 
     await interaction.reply({
+        embeds: [embed],
+        components: [row]
+    });
+}
+
+async function sendCommandV2Embed(interaction: ChatInputCommandInteraction): Promise<void> {
+    const embed = new EmbedBuilder()
+        .setTitle('Command V2')
+        .setDescription('**Command V2** - Advanced carry request system with improved features.')
+        .setColor('LuminousVividPink')
+        .setTimestamp();
+
+    const button = new ButtonBuilder()
+        .setCustomId('command_v2_carry_request')
+        .setLabel('Request Carry')
+        .setEmoji('🎫')
+        .setStyle(ButtonStyle.Primary);
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+
+    await interaction.reply({
+        content: 'Command V2',
         embeds: [embed],
         components: [row]
     });

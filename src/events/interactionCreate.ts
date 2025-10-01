@@ -178,9 +178,25 @@ async function handleButtonInteraction(interaction: ButtonInteraction): Promise<
         await handleCarryRequestEmbedButton(interaction);
         return;
     }
-    
-    if (interaction.customId.startsWith('ticket_')) {
-        await handleTicketButtons(interaction);
+
+    // Handle Components V2 carry request embed button through InteractionRouter
+    if (interaction.customId === 'carry_request_embed_v2' || interaction.customId === 'command_v2_carry_request') {
+        const { InteractionRouter } = await import('../interactions/InteractionRouter');
+        await InteractionRouter.routeButtonInteraction(interaction);
+        return;
+    }
+
+    // Handle all ticket-related and request-carry button interactions through unified router
+    if (interaction.customId.startsWith('request_carry_') ||
+        interaction.customId.startsWith('ticket_') ||
+        interaction.customId === 'claim_ticket' ||
+        interaction.customId === 'edit_ticket' ||
+        interaction.customId === 'close_ticket' ||
+        interaction.customId === 'unclaim_ticket' ||
+        interaction.customId === 'ring_helper') {
+        const { InteractionRouter } = await import('../interactions/InteractionRouter');
+        await InteractionRouter.routeButtonInteraction(interaction);
+        return;
     }
     
     if (interaction.customId.startsWith('vouch_')) {
@@ -255,6 +271,22 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
         await handlePaidHelperSelection(interaction);
     }
     
+    // Handle Components V2 game selection menus
+    if (interaction.customId.startsWith('carry_request_game_select_') ||
+        interaction.customId.startsWith('carry_request_embed_game_select_') ||
+        interaction.customId.startsWith('command_v2_game_select_')) {
+        const { InteractionRouter } = await import('../interactions/InteractionRouter');
+        await InteractionRouter.routeSelectMenuInteraction(interaction);
+        return;
+    }
+
+    // Handle new modular request-carry interactions
+    if (interaction.customId.startsWith('request_carry_gamemode_')) {
+        const { InteractionRouter } = await import('../interactions/InteractionRouter');
+        await InteractionRouter.routeSelectMenuInteraction(interaction);
+        return;
+    }
+    
     if (interaction.customId.startsWith('vouch_gamemode_')) {
         await handleVouchGamemodeSelection(interaction);
     }
@@ -277,6 +309,13 @@ async function handleModalInteraction(interaction: ModalSubmitInteraction): Prom
     
     if (interaction.customId.startsWith('ticket_') && interaction.customId.endsWith('_modal')) {
         await handleTicketModals(interaction);
+    }
+    
+    // Handle new modular request-carry modal interactions
+    if (interaction.customId.includes('request_carry_') && interaction.customId.includes('_modal_')) {
+        const { InteractionRouter } = await import('../interactions/InteractionRouter');
+        await InteractionRouter.routeModalInteraction(interaction);
+        return;
     }
     
     if (interaction.customId.startsWith('vouch_goal_modal_')) {

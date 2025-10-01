@@ -251,8 +251,9 @@ async function logVouchToHistory(guildId: string, vouchData: {
         
         if (!historyChannelId) return;
         
-        const historyChannel = await guild.channels.fetch(historyChannelId);
-        if (!historyChannel || historyChannel.type !== ChannelType.GuildText) return;
+        // Fetch channel directly from client instead of guild to handle cross-guild channels
+        const historyChannel = await client.channels.fetch(historyChannelId);
+        if (!historyChannel?.isTextBased()) return;
 
         const stars = '⭐'.repeat(vouchData.rating);
         const embed = new EmbedBuilder()

@@ -1,4 +1,4 @@
-import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, TextChannel, AttachmentBuilder, ChannelType } from 'discord.js';
+import { ButtonInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, TextChannel, AttachmentBuilder, ChannelType, MessageFlags, ContainerBuilder, TextDisplayBuilder } from 'discord.js';
 import type { Message } from 'discord.js';
 import { getDatabase } from '../../database';
 import { getGameDisplayName } from '../../config/freeCarriesConfig';
@@ -25,7 +25,7 @@ function getGameHelperRoleId(game: string): string | undefined {
 
 function getGameTranscriptChannelId(game: string, type: 'regular' | 'paid'): string | undefined {
     if (!game || !type) {
-        console.warn('⚠️ Missing game or type information for transcript channel lookup');
+        console.warn(' Missing game or type information for transcript channel lookup');
         return undefined;
     }
     
@@ -93,57 +93,90 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
     await botLogger.logTicketClaimed(ticket.ticket_number, interaction.user.id, ticket.user_id);
 
     const originalMessage = interaction.message;
-    const originalEmbed = originalMessage?.embeds[0];
+    
+    // Update the original message to include claimed by information in Components V2 format
+    const originalComponents = originalMessage?.components || [];
+    const updatedComponents = [];
+    
+    // Find and update containers, filter out existing button containers
+    for (const component of originalComponents) {
+        if (component.type === 1) { // Action row - skip existing button rows
+            continue;
+        } else {
+            // This should be the main container with ticket information
+            const updatedContainer = JSON.parse(JSON.stringify(component));
 
-    const updatedEmbed = new EmbedBuilder()
-        .setTitle(originalEmbed?.title || `🎫 Support Ticket #${ticket.ticket_number}`)
-        .setDescription(`**Ticket ID:** \`#${ticket.ticket_number}\`\n**Status:** 🟢 Claimed`)
-        .setColor(0x00ff00)
-        .addFields([
-            {
-                name: "🎮 **Gamemode**",
-                value: `\`${ticket.gamemode}\``,
-                inline: true
-            },
-            {
-                name: "🎯 **Goal**",
-                value: `\`${ticket.goal}\``,
-                inline: true
-            },
-            {
-                name: "📞 **Contact**",
-                value: `\`${ticket.contact}\``,
-                inline: true
-            },
-            {
-                name: "👤 **Submitted by**",
-                value: `<@${ticket.user_id}> (\`${ticket.user_tag}\`)`,
-                inline: false
-            },
-            {
-                name: "🤝 **Claimed by**",
-                value: `${interaction.user} (\`${interaction.user.tag}\`)`,
-                inline: false
+            // Remove any existing action rows from the container to prevent duplicates
+            if (updatedContainer.components) {
+                const originalLength = updatedContainer.components.length;
+                updatedContainer.components = updatedContainer.components.filter((comp: any) => comp.type !== 1);
+                console.log(`[LEGACY_CLAIM_DEBUG] Filtered action rows: ${originalLength} -> ${updatedContainer.components.length}`);
             }
-        ])
-        .setFooter({ 
-            text: `Ticket #${ticket.ticket_number} • Claimed`,
-            iconURL: interaction.client.user?.displayAvatarURL()
-        })
-        .setTimestamp();
 
-    const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents([
+            // Find the position to insert claimed by information (after the header separator)
+            let insertIndex = -1;
+            for (let i = 0; i < updatedContainer.components.length; i++) {
+                const comp = updatedContainer.components[i];
+                if (comp.type === 2) { // Separator
+                    insertIndex = i + 1;
+                    break;
+                }
+            }
+
+            // If we found a separator, insert the claimed by information after it
+            if (insertIndex > 0) {
+                const claimedBySection = {
+                    type: 13, // TextDisplay
+                    content: `**Claimed by:** ${interaction.user} (\`${interaction.user.tag}\`)`
+                };
+                updatedContainer.components.splice(insertIndex, 0, claimedBySection);
+            }
+
+            // Only add container if it has valid components
+            if (updatedContainer.components && updatedContainer.components.length > 0) {
+                updatedComponents.push(updatedContainer);
+                console.log(`[LEGACY_CLAIM_DEBUG] Added container with ${updatedContainer.components.length} components`);
+            } else {
+                console.warn(`[LEGACY_CLAIM_DEBUG] Skipping empty container`);
+            }
+        }
+    }
+
+    // Add helper control buttons using ContainerBuilder for Components V2
+    const buttonContainer = new ContainerBuilder();
+    if (!(buttonContainer as any).components) {
+        (buttonContainer as any).components = [];
+    }
+
+    // Create appropriate buttons for claimed ticket (Unclaim, not Claim)
+    const buttons = [
         new ButtonBuilder()
-            .setCustomId('edit_ticket')
-            .setLabel('Edit Ticket')
-            .setEmoji('✏️')
+            .setCustomId(`ring_helper_${ticket.ticket_number}`)
+            .setLabel('Ring Helper')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId(`unclaim_ticket_${ticket.ticket_number}`)
+            .setLabel('Unclaim')
             .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-            .setCustomId('close_ticket')
-            .setLabel('Close Ticket')
-            .setEmoji('🔒')
+            .setCustomId(`close_ticket_${ticket.ticket_number}`)
+            .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
-    ]);
+    ];
+
+    console.log(`[LEGACY_CLAIM_DEBUG] Creating button row with ${buttons.length} buttons for claimed ticket #${ticket.ticket_number}`);
+
+    // Validate buttons before creating action row
+    if (buttons.length === 0) {
+        console.error(`[LEGACY_CLAIM_DEBUG] No buttons to create for ticket #${ticket.ticket_number}`);
+        return;
+    }
+
+    // Create action row for buttons within the container
+    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+    (buttonContainer as any).components.push(buttonRow);
+
+    console.log(`[LEGACY_CLAIM_DEBUG] Button container has ${(buttonContainer as any).components.length} components`);
 
     const channel = interaction.channel;
     if (channel && 'permissionOverwrites' in channel) {
@@ -173,25 +206,98 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
                 ManageMessages: false
             });
 
-            console.log(`✅ Channel permissions updated - ticket #${ticket.ticket_number} now hidden from other helpers`);
+            console.log(` Channel permissions updated - ticket #${ticket.ticket_number} now hidden from other helpers`);
         } catch (permError) {
-            console.warn('⚠️ Could not update channel permissions:', permError);
+            console.warn(' Could not update channel permissions:', permError);
         }
     }
 
-    const claimMessage = `✅ **This ticket has been claimed by ${interaction.user}**\n\nThey will be assisting you with your request.`;
+    const claimMessage = `**This ticket has been claimed by ${interaction.user}**\n\nThey will be assisting you with your request.`;
 
     await interaction.deferUpdate();
-    
-    await interaction.editReply({
-        embeds: [updatedEmbed],
-        components: [updatedRow]
+
+    // Add the button container to components - but validate first
+    if ((buttonContainer as any).components && (buttonContainer as any).components.length > 0) {
+        // Check that each component in the container has valid structure
+        let validContainer = true;
+        (buttonContainer as any).components.forEach((comp: any, index: number) => {
+            if (!comp.components || comp.components.length === 0) {
+                console.error(`[LEGACY_CLAIM_DEBUG] Button container component ${index} has invalid structure:`, comp);
+                validContainer = false;
+            }
+        });
+
+        if (validContainer) {
+            updatedComponents.push(buttonContainer);
+            console.log(`[LEGACY_CLAIM_DEBUG] Added valid button container`);
+        } else {
+            console.error(`[LEGACY_CLAIM_DEBUG] Skipping invalid button container`);
+        }
+    } else {
+        console.error(`[LEGACY_CLAIM_DEBUG] Button container is empty or invalid`);
+    }
+
+    console.log(`[LEGACY_CLAIM_DEBUG] Attempting to update message with ${updatedComponents.length} components`);
+
+    // Log detailed component structure for debugging and final validation
+    const validatedComponents = [];
+    updatedComponents.forEach((component, index) => {
+        console.log(`[LEGACY_CLAIM_DEBUG] Component ${index}:`, {
+            type: component.type,
+            hasComponents: !!component.components,
+            componentsLength: component.components?.length || 0,
+            componentTypes: component.components?.map((c: any) => ({ type: c.type, hasComponents: !!c.components, componentsLength: c.components?.length })) || []
+        });
+
+        // Final validation: ensure component has valid structure
+        if (component.components && component.components.length > 0) {
+            // Check if all sub-components are valid
+            const validSubComponents = component.components.every((subComp: any) => {
+                if (subComp.type === 1) { // Action Row
+                    return subComp.components && subComp.components.length > 0 && subComp.components.length <= 5;
+                }
+                return true; // Other component types
+            });
+
+            if (validSubComponents) {
+                validatedComponents.push(component);
+                console.log(`[LEGACY_CLAIM_DEBUG] Component ${index} is valid`);
+            } else {
+                console.error(`[LEGACY_CLAIM_DEBUG] Component ${index} has invalid sub-components, skipping`);
+            }
+        } else {
+            console.error(`[LEGACY_CLAIM_DEBUG] Component ${index} has no components, skipping`);
+        }
     });
 
-    await interaction.followUp({
-        content: claimMessage,
-        ephemeral: false
-    });
+    console.log(`[LEGACY_CLAIM_DEBUG] Final component count: ${validatedComponents.length} (originally ${updatedComponents.length})`);
+
+    try {
+        await interaction.editReply({
+            components: validatedComponents,
+            flags: MessageFlags.IsComponentsV2
+        });
+
+        console.log(`[LEGACY_CLAIM_DEBUG] Successfully updated message for ticket #${ticket.ticket_number}`);
+
+        await interaction.followUp({
+            content: claimMessage,
+            ephemeral: false
+        });
+
+    } catch (updateError) {
+        console.error(`[LEGACY_CLAIM_DEBUG] Error updating message for ticket #${ticket.ticket_number}:`, updateError);
+
+        // Try to send a simple follow-up instead
+        try {
+            await interaction.followUp({
+                content: `❌ **Error updating message, but ticket #${ticket.ticket_number} has been claimed successfully.**\n\n${claimMessage}`,
+                ephemeral: false
+            });
+        } catch (followUpError) {
+            console.error(`[LEGACY_CLAIM_DEBUG] Error sending follow-up:`, followUpError);
+        }
+    }
 }
 
 export async function handleEditTicket(interaction: ButtonInteraction): Promise<void> {
@@ -325,7 +431,7 @@ async function generateAndSendTicketTranscript(interaction: ButtonInteraction, t
 
     const transcriptChannel = guild.channels.cache.get(transcriptChannelId) as TextChannel;
     if (!transcriptChannel) {
-        console.error('❌ Transcript channel not found or bot lacks access');
+        console.error(' Transcript channel not found or bot lacks access');
         return;
     }
 
@@ -460,24 +566,24 @@ async function generateAndSendTicketTranscript(interaction: ButtonInteraction, t
                 files: [new AttachmentBuilder(transcriptBuffer, { name: `ticket-${ticket.ticket_number}-transcript.txt` })]
             });
 
-            console.log(`✅ Transcript sent to user ${ticket.user_tag} via DM`);
+            console.log(` Transcript sent to user ${ticket.user_tag} via DM`);
         } catch (dmError) {
             console.warn(`⚠️ Could not send transcript to user ${ticket.user_tag} via DM:`, dmError);
         }
 
-        console.log(`✅ Transcript saved for ticket #${ticket.ticket_number}`);
+        console.log(` Transcript saved for ticket #${ticket.ticket_number}`);
         
         setTimeout(async () => {
             try {
                 await ticketChannel.delete(`Ticket #${ticket.ticket_number} closed and transcript saved`);
-                console.log(`✅ Ticket channel deleted for ticket #${ticket.ticket_number}`);
+                console.log(` Ticket channel deleted for ticket #${ticket.ticket_number}`);
             } catch (deleteError) {
-                console.error(`❌ Error deleting ticket channel for ticket #${ticket.ticket_number}:`, deleteError);
+                console.error(` Error deleting ticket channel for ticket #${ticket.ticket_number}:`, deleteError);
             }
         }, 10000); // 10 second delay
         
     } catch (error) {
-        console.error(`❌ Error generating transcript for ticket #${ticket.ticket_number}:`, error);
+        console.error(` Error generating transcript for ticket #${ticket.ticket_number}:`, error);
     }
 }
 
@@ -720,57 +826,80 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
     await db.unclaimTicket(ticket.ticket_number);
 
     const originalMessage = interaction.message;
-    const originalEmbed = originalMessage?.embeds[0];
+    
+    // Update the original message to remove claimed by information in Components V2 format
+    const originalComponents = originalMessage?.components || [];
+    const updatedComponents = [];
+    
+    // Find and update containers, filter out existing button containers
+    for (const component of originalComponents) {
+        if (component.type === 1) { // Action row - skip existing button rows
+            continue;
+        } else {
+            // This should be the main container with ticket information
+            const updatedContainer = JSON.parse(JSON.stringify(component));
 
-    const updatedEmbed = new EmbedBuilder()
-        .setTitle(originalEmbed?.title || `🎫 Support Ticket #${ticket.ticket_number}`)
-        .setDescription(`**Ticket ID:** \`#${ticket.ticket_number}\`\n**Status:** 🟡 Open`)
-        .setColor(0xffa500)
-        .addFields([
-            {
-                name: "🎮 **Gamemode**",
-                value: `\`${ticket.gamemode}\``,
-                inline: true
-            },
-            {
-                name: "🎯 **Goal**",
-                value: `\`${ticket.goal}\``,
-                inline: true
-            },
-            {
-                name: "📞 **Contact**",
-                value: `\`${ticket.contact}\``,
-                inline: true
-            },
-            {
-                name: "👤 **Submitted by**",
-                value: `<@${ticket.user_id}> (\`${ticket.user_tag}\`)`,
-                inline: false
+            // Remove any existing action rows from the container to prevent duplicates
+            if (updatedContainer.components) {
+                const originalLength = updatedContainer.components.length;
+                updatedContainer.components = updatedContainer.components.filter((comp: any) => comp.type !== 1);
+                console.log(`[LEGACY_UNCLAIM_DEBUG] Filtered action rows: ${originalLength} -> ${updatedContainer.components.length}`);
             }
-        ])
-        .setFooter({ 
-            text: `Ticket #${ticket.ticket_number} • Available for claiming`,
-            iconURL: interaction.client.user?.displayAvatarURL()
-        })
-        .setTimestamp();
 
-    const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents([
+            // Remove any "Claimed by" sections
+            if (updatedContainer.components) {
+                const originalLength = updatedContainer.components.length;
+                updatedContainer.components = updatedContainer.components.filter((comp: any) => {
+                    return !(comp.type === 13 && comp.content && (comp.content.includes('Claimed by:') || comp.content.includes('🤝 Claimed by:')));
+                });
+                console.log(`[LEGACY_UNCLAIM_DEBUG] Filtered claimed by sections: ${originalLength} -> ${updatedContainer.components.length}`);
+            }
+
+            // Only add container if it has valid components
+            if (updatedContainer.components && updatedContainer.components.length > 0) {
+                updatedComponents.push(updatedContainer);
+                console.log(`[LEGACY_UNCLAIM_DEBUG] Added container with ${updatedContainer.components.length} components`);
+            } else {
+                console.warn(`[LEGACY_UNCLAIM_DEBUG] Skipping empty container`);
+            }
+        }
+    }
+
+    // Restore original helper control buttons using ContainerBuilder for Components V2
+    const buttonContainer = new ContainerBuilder();
+    if (!(buttonContainer as any).components) {
+        (buttonContainer as any).components = [];
+    }
+
+    // Create appropriate buttons for unclaimed ticket (only Claim, not Unclaim)
+    const buttons = [
         new ButtonBuilder()
             .setCustomId(`claim_ticket_${ticket.ticket_number}`)
-            .setLabel('Claim Request')
-            .setEmoji('🤝')
+            .setLabel('Claim')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
             .setCustomId(`ring_helper_${ticket.ticket_number}`)
             .setLabel('Ring Helper')
-            .setEmoji('🔔')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
             .setCustomId(`close_ticket_${ticket.ticket_number}`)
-            .setLabel('Close Request')
-            .setEmoji('🔒')
+            .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
-    ]);
+    ];
+
+    console.log(`[LEGACY_UNCLAIM_DEBUG] Creating button row with ${buttons.length} buttons for unclaimed ticket #${ticket.ticket_number}`);
+
+    // Validate buttons before creating action row
+    if (buttons.length === 0) {
+        console.error(`[LEGACY_UNCLAIM_DEBUG] No buttons to create for ticket #${ticket.ticket_number}`);
+        return;
+    }
+
+    // Create action row for buttons within the container
+    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+    (buttonContainer as any).components.push(buttonRow);
+
+    console.log(`[LEGACY_UNCLAIM_DEBUG] Button container has ${(buttonContainer as any).components.length} components`);
 
     const channel = interaction.channel;
     if (channel && 'permissionOverwrites' in channel) {
@@ -797,25 +926,98 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
                 await channel.permissionOverwrites.delete(ticket.claimed_by);
             }
 
-            console.log(`✅ Channel permissions updated - ticket #${ticket.ticket_number} now visible to all helpers`);
+            console.log(` Channel permissions updated - ticket #${ticket.ticket_number} now visible to all helpers`);
         } catch (permError) {
-            console.warn('⚠️ Could not update channel permissions:', permError);
+            console.warn(' Could not update channel permissions:', permError);
         }
     }
 
-    const unclaimMessage = `🔓 **This ticket has been unclaimed by ${interaction.user}**\n\nIt is now available for any helper to claim.`;
+    const unclaimMessage = `**This ticket has been unclaimed by ${interaction.user}**\n\nIt is now available for any helper to claim.`;
 
     await interaction.deferUpdate();
-    
-    await interaction.editReply({
-        embeds: [updatedEmbed],
-        components: [updatedRow]
+
+    // Add the button container to components - but validate first
+    if ((buttonContainer as any).components && (buttonContainer as any).components.length > 0) {
+        // Check that each component in the container has valid structure
+        let validContainer = true;
+        (buttonContainer as any).components.forEach((comp: any, index: number) => {
+            if (!comp.components || comp.components.length === 0) {
+                console.error(`[LEGACY_UNCLAIM_DEBUG] Button container component ${index} has invalid structure:`, comp);
+                validContainer = false;
+            }
+        });
+
+        if (validContainer) {
+            updatedComponents.push(buttonContainer);
+            console.log(`[LEGACY_UNCLAIM_DEBUG] Added valid button container`);
+        } else {
+            console.error(`[LEGACY_UNCLAIM_DEBUG] Skipping invalid button container`);
+        }
+    } else {
+        console.error(`[LEGACY_UNCLAIM_DEBUG] Button container is empty or invalid`);
+    }
+
+    console.log(`[LEGACY_UNCLAIM_DEBUG] Attempting to update message with ${updatedComponents.length} components`);
+
+    // Log detailed component structure for debugging and final validation
+    const validatedComponents = [];
+    updatedComponents.forEach((component, index) => {
+        console.log(`[LEGACY_UNCLAIM_DEBUG] Component ${index}:`, {
+            type: component.type,
+            hasComponents: !!component.components,
+            componentsLength: component.components?.length || 0,
+            componentTypes: component.components?.map((c: any) => ({ type: c.type, hasComponents: !!c.components, componentsLength: c.components?.length })) || []
+        });
+
+        // Final validation: ensure component has valid structure
+        if (component.components && component.components.length > 0) {
+            // Check if all sub-components are valid
+            const validSubComponents = component.components.every((subComp: any) => {
+                if (subComp.type === 1) { // Action Row
+                    return subComp.components && subComp.components.length > 0 && subComp.components.length <= 5;
+                }
+                return true; // Other component types
+            });
+
+            if (validSubComponents) {
+                validatedComponents.push(component);
+                console.log(`[LEGACY_UNCLAIM_DEBUG] Component ${index} is valid`);
+            } else {
+                console.error(`[LEGACY_UNCLAIM_DEBUG] Component ${index} has invalid sub-components, skipping`);
+            }
+        } else {
+            console.error(`[LEGACY_UNCLAIM_DEBUG] Component ${index} has no components, skipping`);
+        }
     });
 
-    await interaction.followUp({
-        content: unclaimMessage,
-        ephemeral: false
-    });
+    console.log(`[LEGACY_UNCLAIM_DEBUG] Final component count: ${validatedComponents.length} (originally ${updatedComponents.length})`);
+
+    try {
+        await interaction.editReply({
+            components: validatedComponents,
+            flags: MessageFlags.IsComponentsV2
+        });
+
+        console.log(`[LEGACY_UNCLAIM_DEBUG] Successfully updated message for ticket #${ticket.ticket_number}`);
+
+        await interaction.followUp({
+            content: unclaimMessage,
+            ephemeral: false
+        });
+
+    } catch (updateError) {
+        console.error(`[LEGACY_UNCLAIM_DEBUG] Error updating message for ticket #${ticket.ticket_number}:`, updateError);
+
+        // Try to send a simple follow-up instead
+        try {
+            await interaction.followUp({
+                content: `❌ **Error updating message, but ticket #${ticket.ticket_number} has been unclaimed successfully.**\n\n${unclaimMessage}`,
+                ephemeral: false
+            });
+        } catch (followUpError) {
+            console.error(`[LEGACY_UNCLAIM_DEBUG] Error sending follow-up:`, followUpError);
+        }
+    }
 }
 
 export async function finalizeTicketClosure(interaction: ButtonInteraction, ticket: any): Promise<void> {
@@ -825,58 +1027,36 @@ export async function finalizeTicketClosure(interaction: ButtonInteraction, tick
     
     await botLogger.logTicketClosed(ticket.ticket_number, 'Ticket completed', ticket.user_id);
 
-    const closedEmbed = new EmbedBuilder()
-        .setTitle(`🔒 Ticket #${ticket.ticket_number} - CLOSED`)
-        .setDescription(`**Ticket ID:** \`#${ticket.ticket_number}\`\n**Status:** 🔴 Closed`)
-        .setColor(0xff0000)
-        .addFields([
-            {
-                name: "🎮 **Gamemode**",
-                value: `\`${ticket.gamemode}\``,
-                inline: true
-            },
-            {
-                name: "🎯 **Goal**",
-                value: `\`${ticket.goal}\``,
-                inline: true
-            },
-            {
-                name: "📞 **Contact**",
-                value: `\`${ticket.contact}\``,
-                inline: true
-            },
-            {
-                name: "👤 **Submitted by**",
-                value: `<@${ticket.user_id}> (\`${ticket.user_tag}\`)`,
-                inline: false
-            }
-        ])
-        .setFooter({ 
-            text: `Ticket #${ticket.ticket_number} • Closed by ${interaction.user.tag}`,
-            iconURL: interaction.client.user?.displayAvatarURL()
-        })
-        .setTimestamp();
-
-    if (ticket.claimed_by) {
-        closedEmbed.addFields({
-            name: "🤝 **Was claimed by**",
-            value: `<@${ticket.claimed_by}> (\`${ticket.claimed_by_tag}\`)`,
-            inline: false
-        });
+    // Create closed ticket display using ContainerBuilder Components V2
+    const closedContainer = new ContainerBuilder();
+    if (!(closedContainer as any).components) {
+        (closedContainer as any).components = [];
     }
 
-    closedEmbed.addFields({
-        name: "🔒 **Closed by**",
-        value: `${interaction.user} (\`${interaction.user.tag}\`)`,
-        inline: false
-    });
+    const titleText = new TextDisplayBuilder()
+        .setContent(`# Ticket #${ticket.ticket_number} - CLOSED\n\n**Ticket ID:** \`#${ticket.ticket_number}\`\n**Status:** Closed`);
+
+    const detailsText = new TextDisplayBuilder()
+        .setContent(`**Gamemode:** \`${ticket.gamemode}\`\n**Goal:** \`${ticket.goal}\`\n**Contact:** \`${ticket.contact}\`\n**Submitted by:** <@${ticket.user_id}> (\`${ticket.user_tag}\`)`);
+
+    // Add claimed by information if available
+    if (ticket.claimed_by) {
+        const claimedText = new TextDisplayBuilder()
+            .setContent(`**Was claimed by:** <@${ticket.claimed_by}> (\`${ticket.claimed_by_tag}\`)`);
+        (closedContainer as any).components.push(claimedText);
+    }
+
+    // Add closed by information
+    const closedByText = new TextDisplayBuilder()
+        .setContent(`**Closed by:** <@${interaction.user.id}> (\`${interaction.user.tag}\`)\n**Time:** ${new Date().toLocaleString()}`);
+    (closedContainer as any).components.push(titleText, detailsText, closedByText);
 
     const closeMessage = `🔒 **This ticket has been closed by ${interaction.user}**\n\n📝 **Transcript has been sent to you via DM and saved to the transcript channel.**\n⏰ **This channel will be deleted in 10 seconds.**\n\n*If you need further assistance, please create a new ticket.*`;
 
     try {
         await interaction.update({
-            embeds: [closedEmbed],
-            components: []
+            components: [closedContainer],
+            flags: MessageFlags.IsComponentsV2
         });
 
         await interaction.followUp({
@@ -887,7 +1067,8 @@ export async function finalizeTicketClosure(interaction: ButtonInteraction, tick
         console.warn('Interaction may have timed out, sending message directly to channel');
         if (interaction.channel) {
             await interaction.channel.send({
-                embeds: [closedEmbed]
+                components: [closedContainer],
+                flags: MessageFlags.IsComponentsV2
             });
             await interaction.channel.send(closeMessage);
         }
@@ -902,7 +1083,7 @@ export async function closeTicketAfterReview(ticket: any, channelId: string, gui
 
         const client = require('../../index').client as any;
         if (!client) {
-            console.error('❌ Client not found when trying to close ticket after review');
+            console.error(' Client not found when trying to close ticket after review');
             return;
         }
 
@@ -910,7 +1091,7 @@ export async function closeTicketAfterReview(ticket: any, channelId: string, gui
         const ticketChannel = guild.channels.cache.get(channelId) as TextChannel;
         
         if (!ticketChannel) {
-            console.error(`❌ Ticket channel ${channelId} not found for ticket #${ticket.ticket_number}`);
+            console.error(` Ticket channel ${channelId} not found for ticket #${ticket.ticket_number}`);
             return;
         }
 
@@ -967,16 +1148,16 @@ export async function closeTicketAfterReview(ticket: any, channelId: string, gui
         setTimeout(async () => {
             try {
                 await ticketChannel.delete(`Ticket #${ticket.ticket_number} closed after review and transcript saved`);
-                console.log(`✅ Ticket channel deleted for ticket #${ticket.ticket_number} after review`);
+                console.log(` Ticket channel deleted for ticket #${ticket.ticket_number} after review`);
             } catch (deleteError) {
-                console.error(`❌ Error deleting ticket channel for ticket #${ticket.ticket_number}:`, deleteError);
+                console.error(` Error deleting ticket channel for ticket #${ticket.ticket_number}:`, deleteError);
             }
         }, 10000); // 10 second delay
 
-        console.log(`✅ Ticket #${ticket.ticket_number} successfully closed after review submission`);
+        console.log(` Ticket #${ticket.ticket_number} successfully closed after review submission`);
 
     } catch (error) {
-        console.error(`❌ Error closing ticket after review for ticket #${ticket.ticket_number}:`, error);
+        console.error(` Error closing ticket after review for ticket #${ticket.ticket_number}:`, error);
     }
 }
 
@@ -994,7 +1175,7 @@ async function generateTicketTranscriptForChannel(ticketChannel: TextChannel, ti
 
     const transcriptChannel = guild.channels.cache.get(transcriptChannelId) as TextChannel;
     if (!transcriptChannel) {
-        console.error('❌ Transcript channel not found or bot lacks access');
+        console.error(' Transcript channel not found or bot lacks access');
         return;
     }
 
@@ -1126,15 +1307,15 @@ async function generateTicketTranscriptForChannel(ticketChannel: TextChannel, ti
                 files: [new AttachmentBuilder(transcriptBuffer, { name: `ticket-${ticket.ticket_number}-transcript.txt` })]
             });
 
-            console.log(`✅ Transcript sent to user ${ticket.user_tag} via DM`);
+            console.log(` Transcript sent to user ${ticket.user_tag} via DM`);
         } catch (dmError) {
             console.warn(`⚠️ Could not send transcript to user ${ticket.user_tag} via DM:`, dmError);
         }
 
-        console.log(`✅ Transcript saved for ticket #${ticket.ticket_number}`);
+        console.log(` Transcript saved for ticket #${ticket.ticket_number}`);
         
     } catch (error) {
-        console.error(`❌ Error generating transcript for ticket #${ticket.ticket_number}:`, error);
+        console.error(` Error generating transcript for ticket #${ticket.ticket_number}:`, error);
     }
 }
 

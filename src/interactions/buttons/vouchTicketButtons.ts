@@ -1,66 +1,122 @@
-import { ButtonInteraction, EmbedBuilder, ChannelType } from 'discord.js';
-import { VouchTicketData, showTicketForm, createVouchTicket, createGoalModal } from '../../commands/vouch/request-carry';
+import { ButtonInteraction, EmbedBuilder, ChannelType, Message, MessageFlags, TextDisplayBuilder, ContainerBuilder } from 'discord.js';
+import { VouchTicketData, showTicketForm, createVouchTicket, createGoalModal, createRobloxUsernameModal, createVouchTicketComponents } from '../../commands/vouch/request-carry';
 import { cooldownManager } from '../../utils/cooldownManager';
 import Database from '../../database/database';
-import { getFreeCarryLimit } from '../../config/freeCarriesConfig';
 import { safeReply, safeEditReply, safeDeferUpdate, isInteractionValid } from '../../utils/interactionUtils';
+
+/**
+ * Get display name for game code
+ */
+function getGameDisplayName(gameCode: string): string {
+    const gameNames: { [key: string]: string } = {
+        'als': 'Anime Last Stand',
+        'av': 'Anime Vanguards'
+    };
+    return gameNames[gameCode] || gameCode.toUpperCase();
+}
+
+/**
+ * Parse ticket data from message and interaction context
+ * Same logic as in select menu handler
+ */
+function parseTicketDataFromInteraction(interaction: ButtonInteraction): VouchTicketData {
+    const ticketData: VouchTicketData = { type: 'regular' };
+
+    try {
+        // Enhanced Components V2 parsing - look at the full message structure
+        const fullContent = JSON.stringify(interaction.message, null, 0);
+        console.log('[PARSE_DEBUG] Full message JSON length:', fullContent.length);
+
+        // Parse type from Components V2 content
+        if (fullContent.includes('Request Regular Help') || fullContent.includes('Regular')) {
+            ticketData.type = 'regular';
+        } else if (fullContent.includes('Request Paid Help') || fullContent.includes('Paid')) {
+            ticketData.type = 'paid';
+        }
+
+        // Parse game from Components V2 content - look for exact display names
+        if (fullContent.includes('Anime Last Stand')) {
+            ticketData.game = 'als';
+        } else if (fullContent.includes('Anime Vanguard')) {
+            ticketData.game = 'av';
+        }
+
+        // Parse gamemode from Components V2 content - look for gamemode value
+        const gamemodeMatch = fullContent.match(/\*\*Gamemode\*\*\\n\`\`([^`]+)\`\`/);
+        if (gamemodeMatch && gamemodeMatch[1]) {
+            ticketData.gamemode = gamemodeMatch[1].trim();
+        }
+
+        // Parse goal from Components V2 content - look for goal value
+        const goalMatch = fullContent.match(/\*\*What do you need help with\?\*\*\\n\`\`([^`]+)\`\`/);
+        if (goalMatch && goalMatch[1]) {
+            ticketData.goal = goalMatch[1].trim();
+        }
+
+        // Parse canJoinLinks from Components V2 content - match actual format
+        if (fullContent.includes('Yes - I can join links')) {
+            ticketData.canJoinLinks = true;
+        } else if (fullContent.includes('No - I cannot join links')) {
+            ticketData.canJoinLinks = false;
+        }
+
+        // Parse selected helper
+        const helperMatch = fullContent.match(/\*\*Selected Helper\*\*\\n\`\`<@(\d+)>\`\`/);
+        if (helperMatch && helperMatch[1]) {
+            ticketData.selectedHelper = helperMatch[1];
+        }
+
+        // Parse ROBLOX username
+        const robloxMatch = fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`([^`]+)\`\`/);
+        if (robloxMatch && robloxMatch[1]) {
+            ticketData.robloxUsername = robloxMatch[1];
+        }
+
+        console.log('[PARSE_DEBUG] Parsed ticket data:', {
+            type: ticketData.type,
+            game: ticketData.game,
+            gamemode: ticketData.gamemode,
+            goal: ticketData.goal ? `${ticketData.goal.substring(0, 50)}...` : undefined,
+            canJoinLinks: ticketData.canJoinLinks,
+            selectedHelper: ticketData.selectedHelper,
+            robloxUsername: ticketData.robloxUsername
+        });
+
+    } catch (error) {
+        console.error('[PARSE_DEBUG] Error parsing Components V2:', error);
+
+        // Fallback: try to get game from custom ID if available
+        const customIdParts = interaction.customId.split('_');
+        if (customIdParts.length > 2) {
+            const gameFromId = customIdParts[customIdParts.length - 1];
+            if (gameFromId === 'av' || gameFromId === 'als') {
+                ticketData.game = gameFromId;
+            }
+        }
+    }
+
+    return ticketData;
+}
 
 
 export async function handleVouchTicketButtons(interaction: ButtonInteraction): Promise<void> {
+    // Check if interaction is still valid
+    if (!isInteractionValid(interaction)) {
+        console.warn('Button interaction expired, cannot process');
+        return;
+    }
+
     const customIdParts = interaction.customId.split('_');
-    const action = customIdParts[1];
+    const action = customIdParts[2]; // request_carry_goal, request_carry_links, etc.
     const userId = customIdParts[customIdParts.length - 1];
-    
+
     if (interaction.user.id !== userId) {
-        await interaction.reply({ content: "❌ This button is not for you!", ephemeral: true });
+        await safeReply(interaction, { content: "❌ This button is not for you!", flags: MessageFlags.Ephemeral });
         return;
     }
 
-    const currentEmbed = interaction.message.embeds[0];
-    if (!currentEmbed) {
-        await interaction.reply({ content: "❌ Could not find ticket form data.", ephemeral: true });
-        return;
-    }
-
-    const embedTitle = currentEmbed?.title || '';
-    const isPaidTicket = embedTitle.includes('💳') || embedTitle.includes('Paid');
-    const ticketData: VouchTicketData = { type: isPaidTicket ? 'paid' : 'regular' };
-    
-    currentEmbed.fields?.forEach(field => {
-        const fieldName = field.name?.replace(/\*\*/g, '').trim();
-        switch (fieldName) {
-            case "🎲 Game":
-                if (field.value !== "❌ *Not set*") {
-                    const displayName = field.value.replace(/`/g, '').trim();
-                    if (displayName === "Anime Last Stand") ticketData.game = "als";
-                    else if (displayName === "Anime Vanguard") ticketData.game = "av";
-                    else ticketData.game = displayName.toLowerCase();
-                }
-                break;
-            case "🎮 Gamemode":
-                if (field.value !== "❌ *Not set*") {
-                    ticketData.gamemode = field.value.replace(/`/g, '').trim();
-                }
-                break;
-            case "🎯 Goal":
-                if (field.value !== "❌ *Not set*") {
-                    ticketData.goal = field.value.replace(/`/g, '').trim();
-                }
-                break;
-            case "🔗 Can Join Links":
-                if (field.value === "✅ Yes") ticketData.canJoinLinks = true;
-                else if (field.value === "❌ No") ticketData.canJoinLinks = false;
-                break;
-            case "👤 Selected Helper":
-                if (field.value && field.value !== "❌ *Not set*") {
-                    const match = field.value.match(/<@(\d+)>/);
-                    if (match) {
-                        ticketData.selectedHelper = match[1];
-                    }
-                }
-                break;
-        }
-    });
+    // Parse ticket data using the enhanced parsing logic
+    const ticketData = parseTicketDataFromInteraction(interaction);
 
     switch (action) {
         case 'goal':
@@ -68,86 +124,47 @@ export async function handleVouchTicketButtons(interaction: ButtonInteraction): 
             await interaction.showModal(modal);
             break;
         case 'links':
-            const linksValue = customIdParts[2] === 'yes';
+            const linksValue = customIdParts[3] === 'yes';
             ticketData.canJoinLinks = linksValue;
             await updateVouchTicketEmbed(interaction, ticketData);
             break;
-        case 'create':
-            if (!ticketData.gamemode || !ticketData.goal || ticketData.canJoinLinks === undefined || !ticketData.game) {
-                await interaction.reply({ content: "❌ Please complete all fields first!", ephemeral: true });
-                return;
-            }
-            
-            if (cooldownManager.isOnCooldown(interaction.user.id, 'carry_request')) {
-                const remainingTime = cooldownManager.getRemainingCooldown(interaction.user.id, 'carry_request');
-                const timeString = cooldownManager.formatRemainingTime(remainingTime);
-                
-                await interaction.reply({
-                    content: `⏰ **Cooldown Active**\n\nYou must wait **${timeString}** before creating another carry request.\n\n*This prevents spam and helps us manage requests efficiently.*`,
-                    ephemeral: true
+        case 'helper':
+            const robloxModal = createRobloxUsernameModal(userId);
+            await interaction.showModal(robloxModal);
+            break;
+        case 'submit':
+            // Check if user can join links OR has provided a helper
+            const hasLinkChoice = ticketData.canJoinLinks === true;
+            const hasHelper = !!ticketData.robloxUsername;
+            const hasValidLinkPreference = hasLinkChoice || hasHelper;
+
+            if (!ticketData.gamemode || !ticketData.goal || !hasValidLinkPreference || !ticketData.game) {
+                const missingFields = [];
+                if (!ticketData.game) missingFields.push('Game');
+                if (!ticketData.gamemode) missingFields.push('Gamemode');
+                if (!ticketData.goal) missingFields.push('Goal');
+                if (!hasValidLinkPreference) missingFields.push('Links preference or helper information');
+
+                await safeReply(interaction, {
+                    content: `❌ **Missing Information**\n\nPlease complete these fields first:\n• ${missingFields.join('\n• ')}\n\n*Fill out the form above and try again.*`,
+                    flags: MessageFlags.Ephemeral
                 });
                 return;
             }
-            
-            if (ticketData.type === 'regular') {
-                const db = new Database();
-                await db.connect();
-                
-                try {
-                    // Use atomic check-and-reserve operation
-                    const eligibility = await db.checkAndReserveFreeCarrySlot(interaction.user.id, interaction.user.tag, ticketData.game, ticketData.gamemode);
-                    
-                    if (!eligibility.eligible) {
-                        const isLimitReached = eligibility.reason?.includes('Daily limit reached');
-                        const isGamemodeNotSupported = eligibility.reason?.includes('does not support free carries');
-                        const isInsufficientMessages = eligibility.reason?.includes('Need at least 50 messages');
-                        const isNoActivity = eligibility.reason?.includes('No message activity');
 
-                        let title = "❌ Free Carry Request Failed";
-                        let description = `**${eligibility.reason}**`;
-                        
-                        if (isLimitReached) {
-                            title = "❌ Free Carry Limit Reached";
-                            description += `\n\nYou've reached your daily limit for this gamemode. You can try again tomorrow.`;
-                        } else if (isGamemodeNotSupported) {
-                            title = "❌ Gamemode Not Supported";
-                            description += `\n\nThis gamemode doesn't offer free carries.`;
-                        } else if (isInsufficientMessages || isNoActivity) {
-                            title = "❌ Message Requirement Not Met";
-                            description += `\n\nYou need to be more active in the server to request free carries.`;
-                        }
+            if (cooldownManager.isOnCooldown(interaction.user.id, 'carry_request')) {
+                const remainingTime = cooldownManager.getRemainingCooldown(interaction.user.id, 'carry_request');
+                const timeString = cooldownManager.formatRemainingTime(remainingTime);
 
-                        const embed = new EmbedBuilder()
-                            .setTitle(title)
-                            .setDescription(description)
-                            .setColor(0xff6b6b);
-
-                        if (isLimitReached || isInsufficientMessages || isNoActivity) {
-                            embed.addFields([
-                                { name: "📝 Requirements for Free Carries", value: "• At least 50 messages in the server today\n• Stay within the daily limits for each gamemode", inline: false },
-                                { name: "📊 Your Current Usage", value: eligibility.limit !== undefined ? `**${ticketData.gamemode}:** ${eligibility.used}/${eligibility.limit} carries used today` : "No usage data available", inline: false },
-                                { name: "💡 Alternatives", value: "• Use **Paid Help** instead\n• Try a different gamemode\n• Wait until tomorrow for your limits to reset", inline: false }
-                            ])
-                            .setFooter({ text: "Limits reset daily at midnight UTC" });
-                        } else if (isGamemodeNotSupported) {
-                            embed.addFields([
-                                { name: "💡 Alternatives", value: "• Use **Paid Help** instead\n• Try a different gamemode that supports free carries\n• Check the supported gamemodes list", inline: false }
-                            ]);
-                        }
-
-                        embed.setTimestamp();
-                        
-                        await interaction.reply({ embeds: [embed], ephemeral: true });
-                        return;
-                    }
-                    
-                    // Slot successfully reserved - no need for further checks
-                    ticketData.slotReserved = true;
-                } finally {
-                    await db.close();
-                }
+                await interaction.update({
+                    content: `⏰ **Cooldown Active**\n\nYou must wait **${timeString}** before creating another carry request.\n\n*This prevents spam and helps us manage requests efficiently.*`,
+                    components: []
+                });
+                return;
             }
-            
+
+            // Note: Free carry system has been removed - all tickets are now regular tickets
+
             await createAndShowVouchTicket(interaction, ticketData);
             break;
         case 'cancel':
@@ -162,17 +179,13 @@ async function updateVouchTicketEmbed(interaction: any, ticketData: VouchTicketD
         return;
     }
 
-    const { createVouchTicketEmbed, createVouchTicketComponents } = require('../../commands/vouch/request-carry');
-    
-    const embed = createVouchTicketEmbed(ticketData);
+    // Create the updated components
     const components = createVouchTicketComponents(ticketData, interaction.user.id);
 
-    const deferred = await safeDeferUpdate(interaction);
-    if (!deferred) return;
-
-    await safeEditReply(interaction, {
-        embeds: [embed],
-        components: components
+    // Update the existing message instead of creating a new one
+    await interaction.update({
+        components: components,
+        flags: MessageFlags.IsComponentsV2
     });
 }
 
@@ -189,35 +202,44 @@ async function createAndShowVouchTicket(interaction: ButtonInteraction, ticketDa
             return;
         }
 
-        const channelId = await createVouchTicket(guild, ticketData, interaction.user.id, interaction.user.tag);
-        
-        cooldownManager.setCooldown(interaction.user.id, 'carry_request');
-        
-        const successEmbed = new EmbedBuilder()
-            .setTitle("✅ Carry Request Created!")
-            .setDescription(`Your ${ticketData.type} carry request has been created successfully!\n\n📍 Go to <#${channelId}> to get help.\n\n⏰ **Cooldown:** You can create another carry request in 10 minutes.`)
-            .setColor(ticketData.type === 'paid' ? 0x00d4aa : 0x5865f2);
+        // Convert to proper format - ensure required fields
+        if (!ticketData.game) {
+            await safeReply(interaction, { content: "❌ Game not specified!", flags: MessageFlags.Ephemeral });
+            return;
+        }
 
-        await safeReply(interaction, { embeds: [successEmbed], ephemeral: true });
+        const channelId = await createVouchTicket(guild, ticketData as any, interaction.user.id, interaction.user.tag);
+
+        cooldownManager.setCooldown(interaction.user.id, 'carry_request');
+
+        const gameDisplay = getGameDisplayName(ticketData.game!);
+
+        // Create success message container
+        const successContainer = new ContainerBuilder()
+            .setAccentColor(0x00FF00);
+        if (!(successContainer as any).components) {
+            (successContainer as any).components = [];
+        }
+
+        const successText = new TextDisplayBuilder()
+            .setContent(`**Help Request Created!**\n\nYour **${ticketData.type}** help request for **${gameDisplay}** is now live!\n\n**Your Ticket Channel:** <#${channelId}>\n\n**What happens next?**\n• Helpers will see your request\n• Someone will claim your ticket\n• Work together to achieve your goal!\n\n**Cooldown:** You can create another request in 10 minutes.`);
+        (successContainer as any).components.push(successText);
+
+        // Update the existing message with the success container
+        await interaction.update({
+            content: null,
+            embeds: [],
+            components: [successContainer],
+            flags: MessageFlags.IsComponentsV2
+        });
 
     } catch (error) {
         console.error('Error creating carry request:', error);
-        
-        // Release reserved slot if ticket creation failed
-        if (ticketData.type === 'regular' && ticketData.slotReserved && ticketData.game && ticketData.gamemode) {
-            try {
-                const db = new Database();
-                await db.connect();
-                await db.releaseReservedFreeCarrySlot(interaction.user.id, ticketData.game, ticketData.gamemode);
-                await db.close();
-                console.log(`[ROLLBACK] Released reserved slot for user ${interaction.user.id} due to ticket creation failure`);
-            } catch (rollbackError) {
-                console.error('Error releasing reserved slot during rollback:', rollbackError);
-            }
-        }
-        
+
+        // Note: Free carry slot reservation system has been removed
+
         if (isInteractionValid(interaction)) {
-            await safeReply(interaction, { content: "❌ Failed to create carry request. Please try again.", ephemeral: true });
+            await safeReply(interaction, { content: "❌ Failed to create carry request. Please try again.", flags: MessageFlags.Ephemeral });
         }
     }
 }
@@ -228,16 +250,24 @@ async function cancelVouchTicket(interaction: ButtonInteraction): Promise<void> 
         return;
     }
 
-    const cancelEmbed = new EmbedBuilder()
-        .setTitle("❌ Vouch Ticket Cancelled")
-        .setDescription("Your vouch ticket creation has been cancelled.")
-        .setColor(0xff6b6b);
+    // Use Components V2 format instead of embeds
+    const components = [];
+    const mainContainer = new ContainerBuilder();
+    if (!(mainContainer as any).components) {
+        (mainContainer as any).components = [];
+    }
+
+    const cancelText = new TextDisplayBuilder()
+        .setContent(`Request Cancelled`);
+    (mainContainer as any).components.push(cancelText);
+
+    components.push(mainContainer);
 
     const deferred = await safeDeferUpdate(interaction);
     if (!deferred) return;
 
     await safeEditReply(interaction, {
-        embeds: [cancelEmbed],
-        components: []
+        components,
+        flags: MessageFlags.IsComponentsV2
     });
 }

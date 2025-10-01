@@ -217,7 +217,7 @@ export async function processReviewSubmission(
             });
         }
 
-        console.log(`✅ Review processed for ticket #${ticketNumber} - ${rating} stars`);
+        console.log(` Review processed for ticket #${ticketNumber} - ${rating} stars`);
 
     } catch (error) {
         console.error('Error processing review submission:', error);
@@ -237,35 +237,36 @@ async function sendToVouchChannel(guildId: string, vouchData: {
     ticketNumber: string;
 }): Promise<void> {
     try {
-        console.log(`📤 Attempting to send review to ${vouchData.ticketType} vouch channel for ticket #${vouchData.ticketNumber}`);
+        console.log(` Attempting to send review to ${vouchData.ticketType} vouch channel for ticket #${vouchData.ticketNumber}`);
         
         const client = require('../../index').client as any;
         if (!client) {
-            console.error('❌ Client not found when trying to send to vouch channel');
+            console.error(' Client not found when trying to send to vouch channel');
             return;
         }
         
         const guild = await client.guilds.fetch(guildId);
-        console.log(`✅ Guild fetched: ${guild.name}`);
-        
-        const historyChannelId = vouchData.ticketType === 'paid' 
-            ? process.env.PAID_VOUCH_HISTORY_CHANNEL_ID 
+        console.log(`Guild fetched: ${guild.name}`);
+
+        const historyChannelId = vouchData.ticketType === 'paid'
+            ? process.env.PAID_VOUCH_HISTORY_CHANNEL_ID
             : process.env.VOUCH_HISTORY_CHANNEL_ID;
-        
-        console.log(`📋 Using channel ID: ${historyChannelId} for ${vouchData.ticketType} vouches`);
-        
+
+        console.log(`Using channel ID: ${historyChannelId} for ${vouchData.ticketType} vouches`);
+
         if (!historyChannelId) {
-            console.error(`❌ No channel ID configured for ${vouchData.ticketType} vouches`);
+            console.error(`No channel ID configured for ${vouchData.ticketType} vouches`);
             return;
         }
-        
-        const historyChannel = await guild.channels.fetch(historyChannelId);
+
+        // Fetch channel directly from client instead of guild to handle cross-guild channels
+        const historyChannel = await client.channels.fetch(historyChannelId);
         if (!historyChannel?.isTextBased()) {
-            console.error(`❌ Vouch channel not found or not text-based: ${historyChannelId}`);
+            console.error(`Vouch channel not found or not text-based: ${historyChannelId}`);
             return;
         }
-        
-        console.log(`✅ Found vouch channel: ${historyChannel.name}`);
+
+        console.log(`Found vouch channel: ${historyChannel.name}`);
 
         const stars = '⭐'.repeat(vouchData.rating);
         const embed = new EmbedBuilder()
@@ -288,10 +289,10 @@ async function sendToVouchChannel(guildId: string, vouchData: {
         }
 
         await historyChannel.send({ embeds: [embed] });
-        console.log(`✅ Review successfully posted to ${vouchData.ticketType} vouch channel for ticket #${vouchData.ticketNumber}`);
+        console.log(` Review successfully posted to ${vouchData.ticketType} vouch channel for ticket #${vouchData.ticketNumber}`);
 
     } catch (error) {
-        console.error(`❌ Error sending review to vouch channel for ticket #${vouchData.ticketNumber}:`, error);
+        console.error(` Error sending review to vouch channel for ticket #${vouchData.ticketNumber}:`, error);
     }
 }
 
@@ -310,7 +311,7 @@ async function handleSkipReview(interaction: ButtonInteraction, ticketNumber: st
 
         await finalizeTicketClosure(interaction, ticket);
         
-        console.log(`✅ Ticket #${ticketNumber} closed without review (skipped by user)`);
+        console.log(` Ticket #${ticketNumber} closed without review (skipped by user)`);
     } catch (error) {
         console.error('Error handling skip review:', error);
         await interaction.reply({

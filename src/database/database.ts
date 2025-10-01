@@ -176,6 +176,10 @@ class DatabaseManager extends EventEmitter {
             await this.initializeTables();
             this.prepareStatements();
             this.isConnected = true;
+
+            // Ensure ticket counters are in sync with actual tickets (after connection is fully established)
+            await this.syncTicketCounters();
+
             this.emit('connected');
         } catch (error) {
             console.error('Error opening database:', error);
@@ -475,10 +479,10 @@ class DatabaseManager extends EventEmitter {
 
     async createTicket(ticket: Omit<TicketRecord, 'id' | 'created_at' | 'updated_at'>): Promise<number> {
         if (!this.isConnected) throw new Error('Database not connected');
-        
+
         const now = Date.now();
         const stmt = this.preparedStatements.get('createTicket');
-        
+
         try {
             const result = stmt.run([
                 ticket.ticket_number,
@@ -500,7 +504,7 @@ class DatabaseManager extends EventEmitter {
                 now,
                 now
             ]);
-            
+
             const ticketType = ticket.type === 'support' ? 'support ticket' : 'carry request';
             console.log(`✅ ${ticketType} ${ticket.ticket_number} created with ID ${result.lastInsertRowid}`);
             return result.lastInsertRowid as number;
@@ -508,6 +512,184 @@ class DatabaseManager extends EventEmitter {
             console.error('Error creating ticket:', error);
             throw error;
         }
+    }
+
+    /**
+     * Atomically create a ticket with auto-generated ticket number
+     * This prevents race conditions that can cause UNIQUE constraint failures
+     */
+    async createTicketWithAutoNumber(ticket: Omit<TicketRecord, 'id' | 'created_at' | 'updated_at' | 'ticket_number'>): Promise<{ ticketId: number; ticketNumber: string }> {
+        if (!this.isConnected) throw new Error('Database not connected');
+
+        const now = Date.now();
+        const maxRetries = 10;
+        let lastError: Error | null = null;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                // Use a more robust transaction approach
+                const result = this.db!.transaction(() => {
+                    let nextTicketNumber: string;
+
+                    console.log(`[ATOMIC_TICKET_CREATE] Attempt ${attempt} for game ${ticket.game}`);
+
+                    // First, check what the highest existing ticket number is for this game
+                    const maxTicketQuery = `
+                        SELECT CAST(ticket_number AS INTEGER) as max_ticket_num
+                        FROM tickets
+                        WHERE game = ? AND ticket_number GLOB '[0-9]*'
+                        ORDER BY CAST(ticket_number AS INTEGER) DESC
+                        LIMIT 1
+                    `;
+                    const maxTicketResult = this.db!.prepare(maxTicketQuery).get([ticket.game]) as { max_ticket_num: number } | undefined;
+                    const currentMaxTicket = maxTicketResult ? maxTicketResult.max_ticket_num : 0;
+
+                    console.log(`[ATOMIC_TICKET_CREATE] Current max ticket number for ${ticket.game}: ${currentMaxTicket}`);
+
+                    // Ensure the counter is at least currentMaxTicket + 1
+                    const syncCounterQuery = `
+                        INSERT INTO ticket_counters (game, counter, created_at, updated_at)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(game) DO UPDATE SET
+                            counter = MAX(counter, ? + 1),
+                            updated_at = ?
+                    `;
+
+                    this.db!.prepare(syncCounterQuery).run([
+                        ticket.game,
+                        currentMaxTicket + 1,
+                        now,
+                        now,
+                        currentMaxTicket,
+                        now
+                    ]);
+
+                    // Now increment and get the next number atomically
+                    const incrementCounterQuery = `
+                        UPDATE ticket_counters
+                        SET counter = counter + 1, updated_at = ?
+                        WHERE game = ?
+                        RETURNING counter
+                    `;
+
+                    const counterResult = this.db!.prepare(incrementCounterQuery).get([now, ticket.game]) as { counter: number };
+
+                    nextTicketNumber = counterResult.counter.toString();
+                    console.log(`[ATOMIC_TICKET_CREATE] Generated ticket number ${nextTicketNumber} for game ${ticket.game}`);
+
+                    // Now create the ticket with the atomically generated number
+                    const createTicketQuery = this.preparedStatements.get('createTicket');
+                    console.log(`[ATOMIC_TICKET_CREATE] Attempting to create ticket with number ${nextTicketNumber}`);
+
+                    const ticketResult = createTicketQuery.run([
+                        nextTicketNumber,
+                        ticket.user_id,
+                        ticket.user_tag,
+                        ticket.channel_id,
+                        ticket.category || null,
+                        ticket.subject || null,
+                        ticket.description || null,
+                        ticket.priority || 'medium',
+                        ticket.game || null,
+                        ticket.gamemode || null,
+                        ticket.goal || null,
+                        ticket.contact,
+                        ticket.status,
+                        ticket.claimed_by || null,
+                        ticket.claimed_by_tag || null,
+                        ticket.type || 'regular',
+                        now,
+                        now
+                    ]);
+
+                    console.log(`[ATOMIC_TICKET_CREATE] Successfully created ticket ${nextTicketNumber} with ID ${ticketResult.lastInsertRowid}`);
+
+                    return {
+                        ticketId: ticketResult.lastInsertRowid as number,
+                        ticketNumber: nextTicketNumber
+                    };
+                })();
+
+                const ticketType = ticket.type === 'support' ? 'support ticket' : 'carry request';
+                console.log(`✅ ${ticketType} ${result.ticketNumber} created atomically with ID ${result.ticketId} (attempt ${attempt})`);
+                return result;
+
+            } catch (error: any) {
+                lastError = error;
+
+                console.error(`[ATOMIC_TICKET_CREATE] Error on attempt ${attempt} for game ${ticket.game}:`, {
+                    code: error.code,
+                    message: error.message,
+                    sql: error.sql || 'N/A'
+                });
+
+                if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' && attempt < maxRetries) {
+                    console.warn(`[ATOMIC_TICKET_CREATE] Ticket number collision on attempt ${attempt}, retrying...`);
+                    // Exponential backoff with jitter
+                    const baseDelay = Math.min(100 * Math.pow(2, attempt - 1), 1000);
+                    const jitter = Math.random() * 50;
+                    await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
+                    continue;
+                } else {
+                    console.error(`[ATOMIC_TICKET_CREATE] Giving up after attempt ${attempt}`);
+                    throw error;
+                }
+            }
+        }
+
+        console.error(`Failed to create ticket after ${maxRetries} attempts`);
+        throw lastError || new Error('Failed to create ticket after multiple attempts');
+    }
+
+    /**
+     * Manually sync ticket counters with the actual max ticket numbers in the database
+     * Call this if there are persistent counter issues
+     */
+    async syncTicketCounters(): Promise<void> {
+        if (!this.isConnected) throw new Error('Database not connected');
+
+        console.log('[SYNC_COUNTERS] Starting ticket counter synchronization...');
+
+        const now = Date.now();
+
+        // Get all games that have tickets
+        const gamesQuery = 'SELECT DISTINCT game FROM tickets WHERE game IS NOT NULL';
+        const games = this.db!.prepare(gamesQuery).all() as { game: string }[];
+
+        for (const { game } of games) {
+            // Find the highest ticket number for this game
+            const maxTicketQuery = `
+                SELECT CAST(ticket_number AS INTEGER) as max_ticket_num
+                FROM tickets
+                WHERE game = ? AND ticket_number GLOB '[0-9]*'
+                ORDER BY CAST(ticket_number AS INTEGER) DESC
+                LIMIT 1
+            `;
+            const maxTicketResult = this.db!.prepare(maxTicketQuery).get([game]) as { max_ticket_num: number } | undefined;
+            const maxTicket = maxTicketResult ? maxTicketResult.max_ticket_num : 0;
+
+            // Update the counter to be at least maxTicket + 1
+            const syncQuery = `
+                INSERT INTO ticket_counters (game, counter, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(game) DO UPDATE SET
+                    counter = MAX(counter, ?),
+                    updated_at = ?
+            `;
+
+            this.db!.prepare(syncQuery).run([
+                game,
+                maxTicket + 1,
+                now,
+                now,
+                maxTicket + 1,
+                now
+            ]);
+
+            console.log(`[SYNC_COUNTERS] Synced ${game}: max ticket = ${maxTicket}, counter set to ${maxTicket + 1}`);
+        }
+
+        console.log('[SYNC_COUNTERS] Ticket counter synchronization complete');
     }
 
     async getTicket(ticketNumber: string): Promise<TicketRecord | null> {
@@ -1292,12 +1474,48 @@ class DatabaseManager extends EventEmitter {
 
     async resetTicketCounter(game: string): Promise<void> {
         const now = Date.now();
-        
+
         try {
             const query = 'UPDATE ticket_counters SET counter = 0, updated_at = ? WHERE game = ?';
             this.db!.prepare(query).run([now, game]);
+            console.log(`✅ Reset ticket counter for ${game} to 0`);
         } catch (error) {
             console.error('Error resetting ticket counter:', error);
+            throw error;
+        }
+    }
+
+    async resetAllGameTicketCounters(): Promise<void> {
+        const now = Date.now();
+
+        try {
+            console.log('🔄 Resetting all game ticket counters to 0...');
+
+            // Reset ALS counter to 0
+            const alsQuery = `
+                INSERT INTO ticket_counters (game, counter, created_at, updated_at)
+                VALUES ('als', 0, ?, ?)
+                ON CONFLICT(game) DO UPDATE SET
+                    counter = 0,
+                    updated_at = ?
+            `;
+            this.db!.prepare(alsQuery).run([now, now, now]);
+            console.log('✅ ALS ticket counter reset to 0');
+
+            // Reset AV counter to 0
+            const avQuery = `
+                INSERT INTO ticket_counters (game, counter, created_at, updated_at)
+                VALUES ('av', 0, ?, ?)
+                ON CONFLICT(game) DO UPDATE SET
+                    counter = 0,
+                    updated_at = ?
+            `;
+            this.db!.prepare(avQuery).run([now, now, now]);
+            console.log('✅ AV ticket counter reset to 0');
+
+            console.log('✅ All game ticket counters have been reset to 0');
+        } catch (error) {
+            console.error('Error resetting all game ticket counters:', error);
             throw error;
         }
     }

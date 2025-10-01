@@ -247,6 +247,57 @@ export async function safeFollowUp(interaction: SafeInteraction, options: Intera
     }
 }
 
+export async function safeUpdate(interaction: ButtonInteraction | StringSelectMenuInteraction, options: InteractionUpdateOptions): Promise<boolean> {
+    const userId = interaction.user.id;
+    const guildId = interaction.guildId || undefined;
+    const channelId = interaction.channelId;
+    const typeName = getInteractionTypeName(interaction);
+    const customId = getCustomId(interaction);
+    
+    try {
+        const now = Date.now();
+        const interactionAge = now - interaction.createdTimestamp;
+        
+        if (interactionAge > 14 * 60 * 1000) {
+            await botLogger.logInteractionTimeout(
+                typeName,
+                customId,
+                userId,
+                interactionAge,
+                guildId,
+                channelId
+            );
+            return false;
+        }
+
+        if (interaction.replied) {
+            await botLogger.logInteractionValidation(
+                typeName,
+                customId,
+                userId,
+                'Interaction already replied, cannot update',
+                guildId,
+                channelId
+            );
+            return false;
+        }
+
+        await interaction.update(options);
+        return true;
+    } catch (error: any) {
+        await botLogger.logInteractionFailure(
+            typeName,
+            customId,
+            userId,
+            error,
+            guildId,
+            channelId,
+            'Safe update operation failed'
+        );
+        return false;
+    }
+}
+
 export function isInteractionValid(interaction: BaseInteraction): boolean {
     const now = Date.now();
     const interactionAge = now - interaction.createdTimestamp;

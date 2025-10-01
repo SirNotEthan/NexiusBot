@@ -37,10 +37,10 @@ export async function handleReviewModal(interaction: ModalSubmitInteraction): Pr
     try {
         await interaction.deferReply({ ephemeral: true });
 
-        console.log(`📝 Processing review submission: ${rating} stars for ticket #${ticketNumber} (${ticketType})`);
+        console.log(`Processing review submission: ${rating} stars for ticket #${ticketNumber} (${ticketType})`);
 
         const guildId = process.env.GUILD_ID;
-        console.log(`🏠 Using guild ID: ${guildId}`);
+        console.log(`Using guild ID: ${guildId}`);
         
         await processReviewSubmission(
             interaction,
@@ -55,7 +55,7 @@ export async function handleReviewModal(interaction: ModalSubmitInteraction): Pr
             guildId
         );
 
-        console.log(`✅ Review submission completed for ticket #${ticketNumber}`);
+        console.log(`Review submission completed for ticket #${ticketNumber}`);
 
         if (isCloseReview) {
             const db = getDatabase();
@@ -69,7 +69,7 @@ export async function handleReviewModal(interaction: ModalSubmitInteraction): Pr
                     interaction.user.id, 
                     interaction.user.tag
                 );
-                console.log(`✅ Ticket #${ticketNumber} automatically closed after review submission`);
+                console.log(`Ticket #${ticketNumber} automatically closed after review submission`);
             }
         }
 
@@ -114,7 +114,7 @@ export async function handleReviewModal(interaction: ModalSubmitInteraction): Pr
             flags: [64] // ephemeral
         });
 
-        console.log(`✅ Review completed by ${interaction.user.tag} for ticket #${ticketNumber}: ${rating} stars`);
+        console.log(`Review completed by ${interaction.user.tag} for ticket #${ticketNumber}: ${rating} stars`);
 
     } catch (error) {
         console.error('Error processing review modal:', error);
