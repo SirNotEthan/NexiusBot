@@ -24,6 +24,16 @@ export async function handleReviewModal(interaction: ModalSubmitInteraction): Pr
     const ticketType = (isCloseReview ? parts[6] : parts[5]) as 'regular' | 'paid';
 
     const reason = interaction.fields.getTextInputValue('reason') || '';
+
+    // Validate that reason is provided and not empty
+    if (!reason.trim()) {
+        await interaction.reply({
+            content: "❌ Please provide feedback about your experience before submitting the review.",
+            ephemeral: true
+        });
+        return;
+    }
+
     let compensation: string | undefined = undefined;
     
     if (ticketType === 'paid') {

@@ -86,12 +86,12 @@ async function showReviewModal(
 
     const reasonInput = new TextInputBuilder()
         .setCustomId('reason')
-        .setLabel('Tell us about your experience (optional)')
+        .setLabel('Tell us about your experience')
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder('Describe what you liked or what could be improved...')
-        .setMinLength(0)
+        .setMinLength(1)
         .setMaxLength(500)
-        .setRequired(false);
+        .setRequired(true);
 
     let compensationInput: TextInputBuilder | null = null;
     
