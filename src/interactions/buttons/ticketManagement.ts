@@ -19,8 +19,13 @@ function hasHelperRole(member: any, game?: string): boolean {
 function getGameHelperRoleId(game: string): string | undefined {
     const gamePrefix = game.toUpperCase();
     const envVar = `${gamePrefix}_HELPER_ROLE_ID`;
-    
+
     return process.env[envVar];
+}
+
+function capitalizeFirstLetter(str: string): string {
+    if (!str) return str;
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function getGameTranscriptChannelId(game: string, type: 'regular' | 'paid'): string | undefined {
@@ -153,15 +158,18 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
         new ButtonBuilder()
             .setCustomId(`ring_helper_${ticket.ticket_number}`)
             .setLabel('Ring Helper')
-            .setStyle(ButtonStyle.Primary),
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('📞'),
         new ButtonBuilder()
             .setCustomId(`unclaim_ticket_${ticket.ticket_number}`)
             .setLabel('Unclaim')
-            .setStyle(ButtonStyle.Secondary),
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🎫'),
         new ButtonBuilder()
             .setCustomId(`close_ticket_${ticket.ticket_number}`)
             .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
+            .setEmoji('🔒')
     ];
 
     console.log(`[LEGACY_CLAIM_DEBUG] Creating button row with ${buttons.length} buttons for claimed ticket #${ticket.ticket_number}`);
@@ -339,7 +347,7 @@ export async function handleEditTicket(interaction: ButtonInteraction): Promise<
         .setCustomId('edit_gamemode')
         .setLabel('Gamemode')
         .setStyle(TextInputStyle.Short)
-        .setValue(ticket.gamemode)
+        .setValue(capitalizeFirstLetter(ticket.gamemode))
         .setRequired(true)
         .setMaxLength(100);
 
@@ -390,7 +398,7 @@ export async function handleCloseTicket(interaction: ButtonInteraction): Promise
 
     const isOwner = ticket.user_id === interaction.user.id;
     const isHelper = interaction.member && hasHelperRole(interaction.member, ticket.game);
-    
+
     if (ticket.type === 'paid' && ticket.claimed_by) {
         const isAssignedHelper = interaction.user.id === ticket.claimed_by;
         if (!isOwner && !isAssignedHelper) {
@@ -400,11 +408,21 @@ export async function handleCloseTicket(interaction: ButtonInteraction): Promise
             });
             return;
         }
+
+        // If ticket creator wants to close but there's a claimed helper, ask for authorization
+        if (isOwner && !isAssignedHelper && ticket.claimed_by) {
+            await showHelperAuthorizationPrompt(interaction, ticket);
+            return;
+        }
     } else if (!isOwner && !isHelper) {
         await interaction.reply({
             content: `❌ You don't have permission to close this ticket. Only the ticket owner or ${getGameDisplayName(ticket.game)} helper roles can close this ticket.`,
             ephemeral: true
         });
+        return;
+    } else if (isOwner && ticket.claimed_by && interaction.user.id !== ticket.claimed_by) {
+        // If ticket creator wants to close but there's a claimed helper, ask for authorization
+        await showHelperAuthorizationPrompt(interaction, ticket);
         return;
     }
 
@@ -463,7 +481,7 @@ async function generateAndSendTicketTranscript(interaction: ButtonInteraction, t
                 },
                 {
                     name: "🎮 **Gamemode**",
-                    value: `\`${ticket.gamemode}\``,
+                    value: `\`${capitalizeFirstLetter(ticket.gamemode)}\``,
                     inline: true
                 },
                 {
@@ -510,66 +528,7 @@ async function generateAndSendTicketTranscript(interaction: ButtonInteraction, t
             files: [attachment]
         });
 
-        try {
-            const ticketOpener = await interaction.client.users.fetch(ticket.user_id);
-            const dmEmbed = new EmbedBuilder()
-                .setTitle(`📝 Your Ticket Transcript - #${ticket.ticket_number}`)
-                .setDescription(`Here's the complete transcript of your support ticket.\n\n**Ticket Details:**`)
-                .setColor(0x5865f2)
-                .addFields([
-                    {
-                        name: "🎲 **Game**",
-                        value: `\`${getGameDisplayName(ticket.game)}\``,
-                        inline: true
-                    },
-                    {
-                        name: "🎮 **Gamemode**",
-                        value: `\`${ticket.gamemode}\``,
-                        inline: true
-                    },
-                    {
-                        name: "🎯 **Goal**",
-                        value: ticket.goal.length > 50 ? `\`${ticket.goal.substring(0, 50)}...\`` : `\`${ticket.goal}\``,
-                        inline: true
-                    },
-                    {
-                        name: "📞 **Contact**",
-                        value: `\`${ticket.contact}\``,
-                        inline: true
-                    },
-                    {
-                        name: "📊 **Statistics**",
-                        value: [
-                            `**Messages:** ${messages.length}`,
-                            `**Created:** <t:${Math.floor(ticket.created_at / 1000)}:F>`,
-                            `**Closed:** <t:${Math.floor(Date.now() / 1000)}:F>`
-                        ].join('\n'),
-                        inline: false
-                    }
-                ])
-                .setFooter({ 
-                    text: `Thank you for using our support system!`,
-                    iconURL: interaction.client.user?.displayAvatarURL()
-                })
-                .setTimestamp();
-
-            if (ticket.claimed_by) {
-                dmEmbed.addFields({
-                    name: "🤝 **Helped by**",
-                    value: `${ticket.claimed_by_tag}`,
-                    inline: false
-                });
-            }
-
-            await ticketOpener.send({
-                embeds: [dmEmbed],
-                files: [new AttachmentBuilder(transcriptBuffer, { name: `ticket-${ticket.ticket_number}-transcript.txt` })]
-            });
-
-            console.log(` Transcript sent to user ${ticket.user_tag} via DM`);
-        } catch (dmError) {
-            console.warn(`⚠️ Could not send transcript to user ${ticket.user_tag} via DM:`, dmError);
-        }
+        // DM functionality removed as requested
 
         console.log(` Transcript saved for ticket #${ticket.ticket_number}`);
         
@@ -599,7 +558,7 @@ async function formatTranscript(ticket: any, messages: Message[], closedBy: any)
     lines.push(`  Ticket ID: #${ticket.ticket_number}`);
     lines.push(`  Submitted by: ${ticket.user_tag} (${ticket.user_id})`);
     lines.push(`  Game: ${getGameDisplayName(ticket.game)}`);
-    lines.push(`  Gamemode: ${ticket.gamemode}`);
+    lines.push(`  Gamemode: ${capitalizeFirstLetter(ticket.gamemode)}`);
     lines.push(`  Goal: ${ticket.goal}`);
     lines.push(`  Contact: ${ticket.contact}`);
     lines.push(`  Created: ${new Date(ticket.created_at).toISOString()}`);
@@ -661,53 +620,72 @@ async function formatTranscript(ticket: any, messages: Message[], closedBy: any)
     return lines.join('\n');
 }
 
+async function showHelperAuthorizationPrompt(interaction: ButtonInteraction, ticket: any): Promise<void> {
+    const authorizationEmbed = new EmbedBuilder()
+        .setTitle("🔒 Request Ticket Closure Authorization")
+        .setDescription(`**${interaction.user}** wants to close this ticket.\n\nAs the helper assigned to this ticket, do you authorize closing it?`)
+        .setColor(0xf39c12)
+        .addFields([
+            {
+                name: "📋 **Ticket Summary**",
+                value: `**Ticket:** #${ticket.ticket_number}\n**Helper:** <@${ticket.claimed_by}>\n**Creator:** <@${ticket.user_id}>`,
+                inline: false
+            }
+        ]);
+
+    const authorizationRow = new ActionRowBuilder<ButtonBuilder>().addComponents([
+        new ButtonBuilder()
+            .setCustomId(`authorize_close_${ticket.ticket_number}_${interaction.user.id}`)
+            .setLabel('✅ Authorize Closure')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`deny_close_${ticket.ticket_number}_${interaction.user.id}`)
+            .setLabel('❌ Deny Closure')
+            .setStyle(ButtonStyle.Danger)
+    ]);
+
+    await interaction.reply({
+        content: `<@${ticket.claimed_by}> - Authorization needed for ticket closure`,
+        embeds: [authorizationEmbed],
+        components: [authorizationRow],
+        ephemeral: false
+    });
+}
+
 async function showReviewPrompt(interaction: ButtonInteraction, ticket: any): Promise<void> {
     const reviewEmbed = new EmbedBuilder()
-        .setTitle("📝 Rate Your Support Experience")
-        .setDescription(`**Before we close this ticket**, please take a moment to rate your experience with **${ticket.claimed_by_tag}**.\n\nYour feedback helps us recognize great helpers and improve our service quality.`)
-        .setColor(0xf39c12)
+        .setTitle("✅ Ticket Closure")
+        .setDescription(`**This ticket is being closed.**\n\nIf you'd like to leave feedback for **${ticket.claimed_by_tag}**, you can use the \`/vouch\` command after the ticket closes.`)
+        .setColor(0x5865f2)
         .addFields([
             {
                 name: "📋 **Ticket Summary**",
                 value: `**Ticket:** #${ticket.ticket_number}\n**Helper:** ${ticket.claimed_by_tag}\n**Type:** ${ticket.type === 'paid' ? '💳 Paid Help' : '🆓 Free Help'}`,
                 inline: false
+            },
+            {
+                name: "💡 **How to leave feedback**",
+                value: `After this ticket closes, use \`/vouch @${ticket.claimed_by_tag}\` to rate your experience.`,
+                inline: false
             }
         ])
-        .setFooter({ 
-            text: "Select your rating below • After submitting your review, the ticket will be automatically closed",
+        .setFooter({
+            text: "Ticket will close automatically in a few seconds",
             iconURL: interaction.client.user?.displayAvatarURL()
         })
         .setTimestamp();
 
-    const reviewRow = new ActionRowBuilder<ButtonBuilder>().addComponents([
-        new ButtonBuilder()
-            .setCustomId(`close_review_1_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
-            .setLabel('1 ⭐')
-            .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-            .setCustomId(`close_review_2_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
-            .setLabel('2 ⭐')
-            .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-            .setCustomId(`close_review_3_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
-            .setLabel('3 ⭐')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-            .setCustomId(`close_review_4_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
-            .setLabel('4 ⭐')
-            .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-            .setCustomId(`close_review_5_${ticket.ticket_number}_${ticket.claimed_by}_${ticket.type}`)
-            .setLabel('5 ⭐')
-            .setStyle(ButtonStyle.Success)
-    ]);
-
     await interaction.reply({
-        content: "## 🌟 How was your support experience?",
+        content: "🔒 **Closing ticket...**",
         embeds: [reviewEmbed],
-        components: [reviewRow],
         ephemeral: false
     });
+
+    // Auto-close after showing the message
+    setTimeout(async () => {
+        await generateAndSendTicketTranscript(interaction, ticket);
+        await finalizeTicketClosure(interaction, ticket);
+    }, 3000); // 3 second delay
 }
 
 export async function handleRingHelper(interaction: ButtonInteraction): Promise<void> {
@@ -766,7 +744,7 @@ export async function handleRingHelper(interaction: ButtonInteraction): Promise<
         return;
     }
 
-    const ringMessage = `🔔 **Helper Ring!**\n\n${helperMention} - ${interaction.user} is requesting assistance in this ${getGameDisplayName(ticket.game)} ${ticket.type} carry ticket!\n\n**Ticket:** #${ticket.ticket_number}\n**Gamemode:** ${ticket.gamemode}\n**Goal:** ${ticket.goal}`;
+    const ringMessage = `🔔 **Helper Ring!**\n\n${helperMention} - ${interaction.user} is requesting assistance in this ${getGameDisplayName(ticket.game)} ${ticket.type} carry ticket!\n\n**Ticket:** #${ticket.ticket_number}\n**Gamemode:** ${capitalizeFirstLetter(ticket.gamemode)}\n**Goal:** ${ticket.goal}`;
 
     await interaction.reply({
         content: ringMessage,
@@ -876,15 +854,18 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
         new ButtonBuilder()
             .setCustomId(`claim_ticket_${ticket.ticket_number}`)
             .setLabel('Claim')
-            .setStyle(ButtonStyle.Success),
+            .setStyle(ButtonStyle.Success)
+            .setEmoji('🎫'),
         new ButtonBuilder()
             .setCustomId(`ring_helper_${ticket.ticket_number}`)
             .setLabel('Ring Helper')
-            .setStyle(ButtonStyle.Primary),
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('📞'),
         new ButtonBuilder()
             .setCustomId(`close_ticket_${ticket.ticket_number}`)
             .setLabel('Close')
             .setStyle(ButtonStyle.Danger)
+            .setEmoji('🔒')
     ];
 
     console.log(`[LEGACY_UNCLAIM_DEBUG] Creating button row with ${buttons.length} buttons for unclaimed ticket #${ticket.ticket_number}`);
@@ -1034,10 +1015,10 @@ export async function finalizeTicketClosure(interaction: ButtonInteraction, tick
     }
 
     const titleText = new TextDisplayBuilder()
-        .setContent(`# Ticket #${ticket.ticket_number} - CLOSED\n\n**Ticket ID:** \`#${ticket.ticket_number}\`\n**Status:** Closed`);
+        .setContent(`# 🎫 Ticket #${ticket.ticket_number} - CLOSED\n\n**Ticket ID:** \`#${ticket.ticket_number}\`\n**Status:** Closed`);
 
     const detailsText = new TextDisplayBuilder()
-        .setContent(`**Gamemode:** \`${ticket.gamemode}\`\n**Goal:** \`${ticket.goal}\`\n**Contact:** \`${ticket.contact}\`\n**Submitted by:** <@${ticket.user_id}> (\`${ticket.user_tag}\`)`);
+        .setContent(`**Gamemode:** \`${capitalizeFirstLetter(ticket.gamemode)}\`\n**Goal:** \`${ticket.goal}\`\n**Contact:** \`${ticket.contact}\`\n**Submitted by:** <@${ticket.user_id}> (\`${ticket.user_tag}\`)`);
 
     // Add claimed by information if available
     if (ticket.claimed_by) {
@@ -1051,7 +1032,7 @@ export async function finalizeTicketClosure(interaction: ButtonInteraction, tick
         .setContent(`**Closed by:** <@${interaction.user.id}> (\`${interaction.user.tag}\`)\n**Time:** ${new Date().toLocaleString()}`);
     (closedContainer as any).components.push(titleText, detailsText, closedByText);
 
-    const closeMessage = `🔒 **This ticket has been closed by ${interaction.user}**\n\n📝 **Transcript has been sent to you via DM and saved to the transcript channel.**\n⏰ **This channel will be deleted in 10 seconds.**\n\n*If you need further assistance, please create a new ticket.*`;
+    const closeMessage = `🔒 **This ticket has been closed by ${interaction.user}**\n\n📝 **Transcript has been saved to the transcript channel.**\n⏰ **This channel will be deleted in 10 seconds.**\n\n*If you need further assistance, please create a new ticket.*`;
 
     try {
         await interaction.update({
@@ -1104,7 +1085,7 @@ export async function closeTicketAfterReview(ticket: any, channelId: string, gui
             .addFields([
                 {
                     name: "🎮 **Gamemode**",
-                    value: `\`${ticket.gamemode}\``,
+                    value: `\`${capitalizeFirstLetter(ticket.gamemode)}\``,
                     inline: true
                 },
                 {
@@ -1137,7 +1118,7 @@ export async function closeTicketAfterReview(ticket: any, channelId: string, gui
             });
         }
 
-        const closeMessage = `🔒 **This ticket has been closed automatically after review submission**\n\n📝 **Transcript has been sent to you via DM and saved to the transcript channel.**\n⏰ **This channel will be deleted in 10 seconds.**\n\n*Thank you for your feedback! If you need further assistance, please create a new ticket.*`;
+        const closeMessage = `🔒 **This ticket has been closed automatically after review submission**\n\n📝 **Transcript has been saved to the transcript channel.**\n⏰ **This channel will be deleted in 10 seconds.**\n\n*Thank you for your feedback! If you need further assistance, please create a new ticket.*`;
 
         await ticketChannel.send({
             embeds: [closedEmbed]
@@ -1204,7 +1185,7 @@ async function generateTicketTranscriptForChannel(ticketChannel: TextChannel, ti
                 },
                 {
                     name: "🎮 **Gamemode**",
-                    value: `\`${ticket.gamemode}\``,
+                    value: `\`${capitalizeFirstLetter(ticket.gamemode)}\``,
                     inline: true
                 },
                 {
@@ -1251,71 +1232,135 @@ async function generateTicketTranscriptForChannel(ticketChannel: TextChannel, ti
             files: [attachment]
         });
 
-        try {
-            const ticketOpener = await guild.client.users.fetch(ticket.user_id);
-            const dmEmbed = new EmbedBuilder()
-                .setTitle(`📝 Your Ticket Transcript - #${ticket.ticket_number}`)
-                .setDescription(`Here's the complete transcript of your support ticket.\n\n**Ticket Details:**`)
-                .setColor(0x5865f2)
-                .addFields([
-                    {
-                        name: "🎲 **Game**",
-                        value: `\`${getGameDisplayName(ticket.game)}\``,
-                        inline: true
-                    },
-                    {
-                        name: "🎮 **Gamemode**",
-                        value: `\`${ticket.gamemode}\``,
-                        inline: true
-                    },
-                    {
-                        name: "🎯 **Goal**",
-                        value: ticket.goal.length > 50 ? `\`${ticket.goal.substring(0, 50)}...\`` : `\`${ticket.goal}\``,
-                        inline: true
-                    },
-                    {
-                        name: "📞 **Contact**",
-                        value: `\`${ticket.contact}\``,
-                        inline: true
-                    },
-                    {
-                        name: "📊 **Statistics**",
-                        value: [
-                            `**Messages:** ${messages.length}`,
-                            `**Created:** <t:${Math.floor(ticket.created_at / 1000)}:F>`,
-                            `**Closed:** <t:${Math.floor(Date.now() / 1000)}:F>`
-                        ].join('\n'),
-                        inline: false
-                    }
-                ])
-                .setFooter({ 
-                    text: `Thank you for using our support system!`,
-                    iconURL: guild.client.user?.displayAvatarURL()
-                })
-                .setTimestamp();
-
-            if (ticket.claimed_by) {
-                dmEmbed.addFields({
-                    name: "🤝 **Helped by**",
-                    value: `${ticket.claimed_by_tag}`,
-                    inline: false
-                });
-            }
-
-            await ticketOpener.send({
-                embeds: [dmEmbed],
-                files: [new AttachmentBuilder(transcriptBuffer, { name: `ticket-${ticket.ticket_number}-transcript.txt` })]
-            });
-
-            console.log(` Transcript sent to user ${ticket.user_tag} via DM`);
-        } catch (dmError) {
-            console.warn(`⚠️ Could not send transcript to user ${ticket.user_tag} via DM:`, dmError);
-        }
+        // DM functionality removed as requested
 
         console.log(` Transcript saved for ticket #${ticket.ticket_number}`);
-        
+
     } catch (error) {
         console.error(` Error generating transcript for ticket #${ticket.ticket_number}:`, error);
     }
+}
+
+export async function handleAuthorizeClose(interaction: ButtonInteraction): Promise<void> {
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+
+    if (parts.length !== 4) {
+        await interaction.reply({
+            content: "❌ Invalid authorization button data.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    const ticketNumber = parts[2];
+    const requestingUserId = parts[3];
+
+    const db = getDatabase();
+    const ticket = await db.getTicketByChannelId(interaction.channelId);
+
+    if (!ticket) {
+        await interaction.reply({
+            content: "❌ Could not find ticket information in database.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    if (ticket.claimed_by !== interaction.user.id) {
+        await interaction.reply({
+            content: "❌ Only the assigned helper can authorize ticket closure.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    // Edit the original authorization message to show authorization granted
+    const authorizedEmbed = new EmbedBuilder()
+        .setTitle("✅ Authorization Granted")
+        .setDescription(`**${interaction.user}** has authorized the ticket closure.`)
+        .setColor(0x00ff00);
+
+    await interaction.update({
+        content: `Authorization granted. Proceeding to close the ticket...`,
+        embeds: [authorizedEmbed],
+        components: []
+    });
+
+    // Continue with the normal closing process - just close the ticket directly
+    setTimeout(async () => {
+        try {
+            const client = require('../../index').client as any;
+            const channel = await client.channels.fetch(interaction.channelId);
+
+            if (channel) {
+                await generateTicketTranscriptForChannel(channel, ticket, interaction.user.id, interaction.user.tag);
+
+                const db = getDatabase();
+                await db.closeTicket(ticket.ticket_number);
+                await botLogger.logTicketClosed(ticket.ticket_number, 'Ticket completed', ticket.user_id);
+
+                // Send closing message and delete channel
+                await channel.send(`🔒 **This ticket has been closed and transcript saved.**\n⏰ **This channel will be deleted in 10 seconds.**`);
+
+                setTimeout(async () => {
+                    try {
+                        await channel.delete(`Ticket #${ticket.ticket_number} closed and transcript saved`);
+                    } catch (deleteError) {
+                        console.error(`Error deleting ticket channel:`, deleteError);
+                    }
+                }, 10000);
+            }
+        } catch (error) {
+            console.error('Error in authorization close process:', error);
+        }
+    }, 2000); // 2 second delay after authorization
+}
+
+export async function handleDenyClose(interaction: ButtonInteraction): Promise<void> {
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+
+    if (parts.length !== 4) {
+        await interaction.reply({
+            content: "❌ Invalid deny button data.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    const ticketNumber = parts[2];
+    const requestingUserId = parts[3];
+
+    const db = getDatabase();
+    const ticket = await db.getTicketByChannelId(interaction.channelId);
+
+    if (!ticket) {
+        await interaction.reply({
+            content: "❌ Could not find ticket information in database.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    if (ticket.claimed_by !== interaction.user.id) {
+        await interaction.reply({
+            content: "❌ Only the assigned helper can deny ticket closure.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    // Edit the original authorization message to show "Request Denied"
+    const deniedEmbed = new EmbedBuilder()
+        .setTitle("❌ Request Denied")
+        .setDescription(`**${interaction.user}** has denied the ticket closure request.`)
+        .setColor(0xff0000);
+
+    await interaction.update({
+        content: `<@${requestingUserId}> - Your request to close the ticket has been denied.`,
+        embeds: [deniedEmbed],
+        components: []
+    });
 }
 

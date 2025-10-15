@@ -16,6 +16,8 @@ import {
     handleCloseTicket,
     handleRingHelper,
     handleUnclaimTicket,
+    handleAuthorizeClose,
+    handleDenyClose,
     handleLeaderboardButtons,
     handleTrackerRefreshButton,
     handleReviewButtons
@@ -233,7 +235,18 @@ export class InteractionRouter {
                 await handleUnclaimTicket(interaction);
                 return;
             }
-            
+
+            // Authorization buttons
+            if (customId.startsWith('authorize_close_')) {
+                await handleAuthorizeClose(interaction);
+                return;
+            }
+
+            if (customId.startsWith('deny_close_')) {
+                await handleDenyClose(interaction);
+                return;
+            }
+
             // Review buttons
             if ((customId.startsWith('review_') || customId.startsWith('close_review_')) && !customId.includes('modal')) {
                 await handleReviewButtons(interaction);
@@ -399,12 +412,12 @@ export class InteractionRouter {
                 .addOptions([
                     new StringSelectMenuOptionBuilder()
                         .setLabel('Anime Last Stand')
-                        .setDescription('Request regular help for ALS')
+                        .setDescription('Request a regular help ticket for ALS')
                         .setValue('als')
                         .setEmoji('⚔️'),
                     new StringSelectMenuOptionBuilder()
                         .setLabel('Anime Vanguard')
-                        .setDescription('Request regular help for AV')
+                        .setDescription('Request a regular help ticket for AV')
                         .setValue('av')
                         .setEmoji('🛡️')
                 ]);
@@ -412,7 +425,7 @@ export class InteractionRouter {
             const row = new (ActionRowBuilder as any)().addComponents(gameSelectMenu);
 
             await interaction.editReply({
-                content: "🎫 **Create Regular Help Request** - Select the game you need help with:",
+                content: "🎫 **Create A Regular Help Request Ticket**",
                 components: [row]
             });
 

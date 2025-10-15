@@ -68,6 +68,14 @@ class BotLogger {
         return `<t:${Math.floor(date.getTime() / 1000)}:f>`;
     }
 
+    private validateFieldValue(value: string, maxLength: number = 1024): string {
+        if (value.length <= maxLength) {
+            return value;
+        }
+        // Leave room for '...' ellipsis
+        return value.slice(0, maxLength - 3) + '...';
+    }
+
     async log(entry: LogEntry): Promise<void> {
         const timestamp = entry.timestamp || new Date();
         const emoji = this.getEmoji(entry.level);
@@ -109,7 +117,12 @@ class BotLogger {
                 .setTimestamp(timestamp);
 
             if (entry.fields && entry.fields.length > 0) {
-                embed.addFields(entry.fields);
+                // Validate all field values before adding them
+                const validatedFields = entry.fields.map(field => ({
+                    ...field,
+                    value: this.validateFieldValue(field.value)
+                }));
+                embed.addFields(validatedFields);
             }
 
             const contextFields = [];
@@ -227,11 +240,11 @@ class BotLogger {
     ): Promise<void> {
         const description = `Command executed${executionTime ? ` in ${executionTime}ms` : ''}`;
         const fields = [];
-        
+
         if (options) {
             fields.push({
                 name: '⚙️ Options',
-                value: options,
+                value: this.validateFieldValue(options),
                 inline: false
             });
         }
@@ -322,7 +335,7 @@ class BotLogger {
     }
 
     async logTicketCreated(ticketNumber: string, userId: string, ticketType: string, game: string): Promise<void> {
-        await this.info('Ticket Created', `New ${ticketType} ticket created`, {
+        await this.info('🎫 Ticket Created', `New ${ticketType} ticket created`, {
             userId,
             fields: [
                 {

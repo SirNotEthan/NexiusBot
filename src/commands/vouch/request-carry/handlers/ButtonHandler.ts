@@ -13,6 +13,12 @@ function getClient() {
     }
 }
 
+// Helper function to capitalize first letter
+function capitalizeFirstLetter(str: string): string {
+    if (!str) return str;
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 /**
  * Handles all button interactions for the request-carry command
  * Following the new modular structure for better maintainability
@@ -988,7 +994,7 @@ export class RequestCarryButtonHandler {
             .setCustomId('edit_gamemode')
             .setLabel('Gamemode')
             .setStyle(TextInputStyle.Short)
-            .setValue(ticket.gamemode || '')
+            .setValue(capitalizeFirstLetter(ticket.gamemode || ''))
             .setRequired(true)
             .setMaxLength(100);
 
@@ -1182,7 +1188,7 @@ export class RequestCarryButtonHandler {
             // Add all the ticket information in a details section
             const detailsContent = [
                 `**🎮 Game:** ${ticket.game ? ticket.game.toUpperCase() : 'Unknown'}`,
-                `**🎯 Gamemode:** ${ticket.gamemode || 'Not specified'}`,
+                `**🎯 Gamemode:** ${capitalizeFirstLetter(ticket.gamemode || 'Not specified')}`,
                 `**📝 Type:** ${ticket.type === 'paid' ? 'Paid Help' : 'Regular Help'}`,
                 `**👤 Requested by:** <@${ticket.user_id}>`,
                 `**🔗 Can Join Links:** ${ticket.contact ? 'Yes' : 'No'}`,
@@ -1284,7 +1290,7 @@ export class RequestCarryButtonHandler {
             lines.push(`  Ticket ID: #${ticket.ticket_number}`);
             lines.push(`  Submitted by: ${ticket.user_tag} (${ticket.user_id})`);
             lines.push(`  Game: ${ticket.game || 'Unknown'}`);
-            lines.push(`  Gamemode: ${ticket.gamemode || 'Not specified'}`);
+            lines.push(`  Gamemode: ${capitalizeFirstLetter(ticket.gamemode || 'Not specified')}`);
             lines.push(`  Goal: ${ticket.goal || 'Not specified'}`);
             lines.push(`  Type: ${ticket.type || 'regular'}`);
             lines.push(`  Created: ${new Date(ticket.created_at).toISOString()}`);
@@ -1379,7 +1385,7 @@ export class RequestCarryButtonHandler {
                     { name: '🎫 Ticket', value: `#${ticket.ticket_number}`, inline: true },
                     { name: '👤 Requester', value: `<@${ticket.user_id}>`, inline: true },
                     { name: '🎮 Game', value: game.toUpperCase(), inline: true },
-                    { name: '🎯 Gamemode', value: ticket.gamemode || 'Not specified', inline: true },
+                    { name: '🎯 Gamemode', value: capitalizeFirstLetter(ticket.gamemode || 'Not specified'), inline: true },
                     { name: '📝 Type', value: type === 'paid' ? 'Paid Help' : 'Regular Help', inline: true },
                     { name: '🔒 Closed by', value: `<@${closedBy.id}>`, inline: true }
                 ])
@@ -1493,7 +1499,7 @@ export class RequestCarryButtonHandler {
                 .addFields([
                     { name: '🎫 Ticket ID', value: `#${ticket.ticket_number}`, inline: true },
                     { name: '🎮 Game', value: ticket.game?.toUpperCase() || 'Unknown', inline: true },
-                    { name: '🎯 Gamemode', value: ticket.gamemode || 'Not specified', inline: true },
+                    { name: '🎯 Gamemode', value: capitalizeFirstLetter(ticket.gamemode || 'Not specified'), inline: true },
                     { name: '📝 Goal', value: ticket.goal || 'Not specified', inline: false }
                 ])
                 .setFooter({ text: 'Thank you for using our carry service!' })

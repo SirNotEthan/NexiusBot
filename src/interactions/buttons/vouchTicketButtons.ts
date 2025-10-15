@@ -228,7 +228,7 @@ async function createAndShowVouchTicket(interaction: ButtonInteraction, ticketDa
         }
 
         const successText = new TextDisplayBuilder()
-            .setContent(`**Help Request Created!**\n\nYour **${ticketData.type}** help request for **${gameDisplay}** is now live!\n\n**Your Ticket Channel:** <#${channelId}>\n\n**What happens next?**\n• Helpers will see your request\n• Someone will claim your ticket\n• Work together to achieve your goal!\n\n**Cooldown:** You can create another request in 10 minutes.`);
+            .setContent(`**🎫 Help Request Ticket Created**\n\nYour **${ticketData.type}** help request ticket for **${gameDisplay}** has been created\n\n**Your Ticket Channel:** <#${channelId}>\n\n**What happens next?**\n• Helpers will see your request\n• Someone will claim your ticket\n• They will help you complete your goal\n\n**Cooldown:** You can create another request after 10 mins of vouching the person who helped you`);
         (successContainer as any).components.push(successText);
 
         // Update the existing message with the success container

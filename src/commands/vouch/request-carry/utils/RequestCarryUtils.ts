@@ -169,7 +169,7 @@ export class RequestCarryUtils {
 
         // Add ticket header section
         const headerSection = new TextDisplayBuilder()
-            .setContent(`# Ticket Created`);
+            .setContent(`# 🎫 Ticket Created`);
         (ticketContainer as any).components.push(headerSection);
 
         // Add requester section
@@ -189,7 +189,7 @@ export class RequestCarryUtils {
 
         // Add gamemode section
         const gamemodeSection = new TextDisplayBuilder()
-            .setContent(`**Gamemode:** \n \`\`\`${data.gamemode}\`\`\``);
+            .setContent(`**Gamemode:** \n \`\`\`${this.capitalizeFirstLetter(data.gamemode || '')}\`\`\``);
         (ticketContainer as any).components.push(gamemodeSection);
 
         // Add links section
@@ -275,25 +275,35 @@ export class RequestCarryUtils {
         const buttons: ButtonBuilder[] = [];
 
         if (status === 'open') {
-            // Show claim and close buttons for open tickets
+            // Show claim and ring helper buttons for open tickets
             buttons.push(
                 new ButtonBuilder()
                     .setCustomId(`ticket_claim_${ticketNumber}`)
                     .setLabel('Claim Ticket')
                     .setStyle(ButtonStyle.Primary)
-                    .setEmoji('🤝')
+                    .setEmoji('🎫'),
+                new ButtonBuilder()
+                    .setCustomId(`ring_helper_${ticketNumber}`)
+                    .setLabel('Ring Helper')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('📞')
             );
-            console.log(`[BUTTON_CREATE_DEBUG] Added Claim Ticket button`);
+            console.log(`[BUTTON_CREATE_DEBUG] Added Claim Ticket and Ring Helper buttons`);
         } else if (status === 'claimed') {
-            // Show unclaim and close buttons for claimed tickets
+            // Show ring helper and unclaim buttons for claimed tickets
             buttons.push(
+                new ButtonBuilder()
+                    .setCustomId(`ring_helper_${ticketNumber}`)
+                    .setLabel('Ring Helper')
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('📞'),
                 new ButtonBuilder()
                     .setCustomId(`ticket_unclaim_${ticketNumber}`)
                     .setLabel('Unclaim Ticket')
                     .setStyle(ButtonStyle.Secondary)
-                    .setEmoji('❌')
+                    .setEmoji('🎫')
             );
-            console.log(`[BUTTON_CREATE_DEBUG] Added Unclaim Ticket button`);
+            console.log(`[BUTTON_CREATE_DEBUG] Added Ring Helper and Unclaim Ticket buttons`);
         }
 
         // Always show close button unless ticket is already closed
@@ -355,5 +365,13 @@ export class RequestCarryUtils {
      */
     static formatValidationErrors(errors: string[]): string {
         return `❌ **Please fix the following issues:**\n\n${errors.map(error => `• ${error}`).join('\n')}`;
+    }
+
+    /**
+     * Capitalize the first letter of a string
+     */
+    static capitalizeFirstLetter(str: string): string {
+        if (!str) return str;
+        return str.charAt(0).toUpperCase() + str.slice(1);
     }
 }

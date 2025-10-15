@@ -360,7 +360,7 @@ async function handleEmbedTicketTypeSelection(interaction: StringSelectMenuInter
             .addFields([
                 {
                     name: '🎲 Available Games',
-                    value: '• **Anime Last Stand** - Story, Legend Stages, Raids, Dungeons, Survival, Breach, Portals\n• **Anime Vanguards** - Story, Legend Stages, Rift, Inf, Raids, SJW Dungeon, Dungeons, Portals, Void, Towers, Events',
+                    value: '• **Anime Last Stand** - 📚 Story, ♾️ Infinite, ⚔️ Raids, 🏆 Challenges, 🎤 Portals, 🪨 Cavens, 👑 Legend Stages, 💀 Dungeons, 🩹 Survival\n• **Anime Vanguards** - 📖 Story, 👑 Infinite, 🏆 Challenges, 🌟 Legend, 🔥 Raid dungeons, 🌀 Portal, 🐉 Boss Raids, 🌠 Rifts',
                     inline: false
                 }
             ])

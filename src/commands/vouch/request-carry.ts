@@ -32,6 +32,11 @@ function getGameDisplayName(gameCode: string): string {
     return gameNames[gameCode] || gameCode.toUpperCase();
 }
 
+function capitalizeFirstLetter(str: string): string {
+    if (!str) return str;
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 function getGameCategoryId(game: string, type: 'regular' | 'paid'): string | undefined {
     const gamePrefix = game.toUpperCase();
     const typePrefix = type.toUpperCase();
@@ -50,27 +55,26 @@ function getGameHelperRoleId(game: string): string | undefined {
 function getGamemodeOptions(game: string): { label: string; value: string }[] {
     if (game === 'av') {
         return [
-            { label: 'Story', value: 'story' },
-            { label: 'Legend Stages', value: 'legend-stages' },
-            { label: 'Rift', value: 'rift' },
-            { label: 'Inf', value: 'inf' },
-            { label: 'Raids', value: 'raids' },
-            { label: 'SJW Dungeon', value: 'sjw-dungeon' },
-            { label: 'Dungeons', value: 'dungeons' },
-            { label: 'Portals', value: 'portals' },
-            { label: 'Void', value: 'void' },
-            { label: 'Towers', value: 'towers' },
-            { label: 'Events', value: 'events' }
+            { label: '📖 Story', value: 'story' },
+            { label: '👑 Infinite', value: 'inf' },
+            { label: '🏆 Challenges', value: 'towers' },
+            { label: '🌟 Legend', value: 'legend-stages' },
+            { label: '🔥 Raid dungeons', value: 'dungeons' },
+            { label: '🌀 Portal', value: 'portals' },
+            { label: '🐉 Boss Raids', value: 'raids' },
+            { label: '🌠 Rifts', value: 'rift' }
         ];
     } else if (game === 'als') {
         return [
-            { label: 'Story', value: 'story' },
-            { label: 'Legend Stages', value: 'legend-stages' },
-            { label: 'Raids', value: 'raids' },
-            { label: 'Dungeons', value: 'dungeons' },
-            { label: 'Survival', value: 'survival' },
-            { label: 'Breach', value: 'breach' },
-            { label: 'Portals', value: 'portals' }
+            { label: '📚 Story', value: 'story' },
+            { label: '♾️ Infinite', value: 'inf' },
+            { label: '⚔️ Raids', value: 'raids' },
+            { label: '🏆 Challenges', value: 'towers' },
+            { label: '🎤 Portals', value: 'portals' },
+            { label: '🪨 Cavens', value: 'breach' },
+            { label: '👑 Legend Stages', value: 'legend-stages' },
+            { label: '💀 Dungeons', value: 'dungeons' },
+            { label: '🩹 Survival', value: 'survival' }
         ];
     }
     return [];
@@ -471,28 +475,24 @@ export async function createVouchTicket(
         }
 
         // Header
-        const typeLabel = ticketData.type === 'paid' ? 'Paid Help' : 'Regular Help';
+        const typeLabel = ticketData.type === 'paid' ? 'Paid Help Ticket' : 'Regular Help Ticket';
         const statusText = ticketData.type === 'paid' && ticketData.selectedHelper ? '\n**Status:** Assigned' : '';
         const headerText = new TextDisplayBuilder()
-            .setContent(`# Help Request #${ticketNumber}\n**Request created by:** <@${userId}>\n**Type:** ${typeLabel}${statusText}`);
+            .setContent(`# 🎫 Ticket Created\n**Request created by:** <@${userId}>\n**Type:** ${typeLabel}${statusText}`);
         (mainContainer as any).components.push(headerText);
         (mainContainer as any).components.push(new SeparatorBuilder());
 
         // Request details
         const gameSection = new TextDisplayBuilder()
-            .setContent(`**Game:** \`${getGameDisplayName(ticketData.game!)}\``);
+            .setContent(`**:video_game: Gamemode:** \`\`\`${capitalizeFirstLetter(ticketData.gamemode!)}\`\`\` `);
         (mainContainer as any).components.push(gameSection);
 
-        const gamemodeSection = new TextDisplayBuilder()
-            .setContent(`**Gamemode:** \`${ticketData.gamemode!}\``);
-        (mainContainer as any).components.push(gamemodeSection);
-
         const goalSection = new TextDisplayBuilder()
-            .setContent(`**Goal:** \`${ticketData.goal!}\``);
+            .setContent(`**:dart: Goal:** \`\`\`${ticketData.goal!}\`\`\``);
         (mainContainer as any).components.push(goalSection);
 
         const linksSection = new TextDisplayBuilder()
-            .setContent(`**Can Join Links:** \`${ticketData.canJoinLinks ? 'Yes' : 'No'}\``);
+            .setContent(`**:link: Communication:** \`\`\`${ticketData.canJoinLinks ? 'Can join links' : 'Cannot join links'}\`\`\` `);
         (mainContainer as any).components.push(linksSection);
 
         if (ticketData.robloxUsername) {
@@ -503,7 +503,7 @@ export async function createVouchTicket(
 
         if (ticketData.selectedHelper) {
             const helperSection = new TextDisplayBuilder()
-                .setContent(`**Selected Helper:** <@${ticketData.selectedHelper}>`);
+                .setContent(`**Selected Helper:** \`\`\`<@${ticketData.selectedHelper}>\`\`\` `);
             (mainContainer as any).components.push(helperSection);
         }
 
@@ -517,34 +517,36 @@ export async function createVouchTicket(
                 new ButtonBuilder()
                     .setCustomId(`ring_helper_${ticketNumber}`)
                     .setLabel('Ring Helper')
-                    .setStyle(ButtonStyle.Primary),
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('📞'),
                 new ButtonBuilder()
                     .setCustomId(`unclaim_ticket_${ticketNumber}`)
                     .setLabel('Unclaim')
-                    .setStyle(ButtonStyle.Secondary),
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('🎫'),
                 new ButtonBuilder()
                     .setCustomId(`close_ticket_${ticketNumber}`)
                     .setLabel('Close')
                     .setStyle(ButtonStyle.Danger)
+                    .setEmoji('🔒')
             ]);
         } else {
             buttons = new ActionRowBuilder<ButtonBuilder>().addComponents([
                 new ButtonBuilder()
                     .setCustomId(`claim_ticket_${ticketNumber}`)
                     .setLabel('Claim')
-                    .setStyle(ButtonStyle.Success),
+                    .setStyle(ButtonStyle.Success)
+                    .setEmoji('🎫'),
                 new ButtonBuilder()
                     .setCustomId(`ring_helper_${ticketNumber}`)
                     .setLabel('Ring Helper')
-                    .setStyle(ButtonStyle.Primary),
-                new ButtonBuilder()
-                    .setCustomId(`unclaim_ticket_${ticketNumber}`)
-                    .setLabel('Unclaim')
-                    .setStyle(ButtonStyle.Secondary),
+                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('📞'),
                 new ButtonBuilder()
                     .setCustomId(`close_ticket_${ticketNumber}`)
                     .setLabel('Close')
                     .setStyle(ButtonStyle.Danger)
+                    .setEmoji('🔒')
             ]);
         }
 
@@ -566,11 +568,11 @@ export async function createVouchTicket(
         } else {
             const gameHelperRoleId = getGameHelperRoleId(ticketData.game!);
             if (gameHelperRoleId) {
-                await ticketChannel.send(`<@&${gameHelperRoleId}> - New ${ticketData.type} ${getGameDisplayName(ticketData.game!)} carry request created!`);
+                await ticketChannel.send(`<@&${gameHelperRoleId}> New ${ticketData.type} ${getGameDisplayName(ticketData.game!)} carry ticket has been created`);
             } else {
                 const helperRoleId = ticketData.type === 'paid' ? process.env.PAID_HELPER_ROLE_ID : process.env.HELPER_ROLE_ID;
                 if (helperRoleId) {
-                    await ticketChannel.send(`<@&${helperRoleId}> - New ${ticketData.type} carry request created!`);
+                    await ticketChannel.send(`<@&${helperRoleId}> New ${ticketData.type} carry ticket has been created`);
                 }
             }
         }

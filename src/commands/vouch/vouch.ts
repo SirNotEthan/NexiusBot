@@ -25,45 +25,55 @@ const data = new SlashCommandBuilder()
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
-        const deprecationEmbed = new EmbedBuilder()
-            .setTitle("📋 Vouch System Updated!")
-            .setDescription("**The vouch system has been automated!** 🎉\n\nYou no longer need to manually use the `/vouch` command. Here's how the new system works:")
-            .setColor(0x5865f2)
-            .addFields([
-                {
-                    name: "🔄 **Automatic Process**",
-                    value: "When your ticket is closed, you'll automatically receive a review request via DM.",
-                    inline: false
-                },
-                {
-                    name: "📝 **Complete Transcript**",
-                    value: "You'll also receive the full ticket transcript in your DMs.",
-                    inline: false
-                },
-                {
-                    name: "⭐ **Easy Rating**",
-                    value: "Simply click the star buttons (1-5) to rate your experience.",
-                    inline: false
-                },
-                {
-                    name: "💬 **Optional Feedback**",
-                    value: "Add additional comments about your experience (optional).",
-                    inline: false
-                },
-                {
-                    name: "📊 **Automatic Processing**",
-                    value: "Your review will be automatically sent to the vouch channel and helper stats updated.",
-                    inline: false
-                }
-            ])
-            .setFooter({ 
-                text: "This command will be removed in a future update",
-                iconURL: interaction.client.user?.displayAvatarURL()
-            })
-            .setTimestamp();
+        const helper = interaction.options.getUser('helper', true);
+        const db = new Database();
+        await db.connect();
 
-        await interaction.reply({ embeds: [deprecationEmbed], ephemeral: true });
-        
+        try {
+            // Check if the user has any recent closed tickets with this helper
+            const recentTicketsQuery = `
+                SELECT * FROM tickets
+                WHERE user_id = ? AND claimed_by = ? AND status = 'closed'
+                AND created_at > ?
+                ORDER BY created_at DESC LIMIT 1
+            `;
+            const recentTickets = (db as any).db!.prepare(recentTicketsQuery).all([
+                interaction.user.id,
+                helper.id,
+                Date.now() - (7 * 24 * 60 * 60 * 1000)
+            ]); // 7 days ago
+
+            if (!recentTickets || recentTickets.length === 0) {
+                await interaction.reply({
+                    content: "❌ **No recent tickets found** with this helper. You can only vouch for helpers who have recently helped you in a ticket within the last 7 days.",
+                    ephemeral: true
+                });
+                return;
+            }
+
+            const ticket = recentTickets[0];
+
+            // Check if already vouched for this ticket
+            const existingVouchQuery = `
+                SELECT * FROM vouches
+                WHERE ticket_id = ? AND user_id = ?
+            `;
+            const existingVouch = (db as any).db!.prepare(existingVouchQuery).all([ticket.id, interaction.user.id]);
+
+            if (existingVouch && existingVouch.length > 0) {
+                await interaction.reply({
+                    content: "❌ **You have already submitted a review** for this helper on your recent ticket.",
+                    ephemeral: true
+                });
+                return;
+            }
+
+            await showRatingSelection(interaction, helper.id, helper.tag, ticket.ticket_number, ticket.type);
+
+        } finally {
+            await db.close();
+        }
+
     } catch (error) {
         console.error("Error in vouch command:", error);
         await handleVouchError(interaction, error);

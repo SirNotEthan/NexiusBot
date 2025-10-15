@@ -333,26 +333,25 @@ export class RequestCarryBuilder {
     private getGamemodeOptions(game: string): { label: string; value: string; description?: string }[] {
         const gamemodes: Record<string, { label: string; value: string; description?: string }[]> = {
             'av': [
-                { label: 'Story', value: 'story', description: 'Main story progression' },
-                { label: 'Legend Stages', value: 'legend-stages', description: 'Challenge stages' },
-                { label: 'Rift', value: 'rift', description: 'Rift battles' },
-                { label: 'Inf', value: 'inf', description: 'Infinite mode' },
-                { label: 'Raids', value: 'raids', description: 'Raid battles' },
-                { label: 'SJW Dungeon', value: 'sjw-dungeon', description: 'Special dungeon' },
-                { label: 'Dungeons', value: 'dungeons', description: 'Regular dungeons' },
-                { label: 'Portals', value: 'portals', description: 'Portal challenges' },
-                { label: 'Void', value: 'void', description: 'Void content' },
-                { label: 'Towers', value: 'towers', description: 'Tower challenges' },
-                { label: 'Events', value: 'events', description: 'Limited time events' }
+                { label: '📖 Story', value: 'story', description: 'Main story progression' },
+                { label: '👑 Infinite', value: 'inf', description: 'Infinite mode' },
+                { label: '🏆 Challenges', value: 'towers', description: 'Challenge content' },
+                { label: '🌟 Legend', value: 'legend-stages', description: 'Legend stages' },
+                { label: '🔥 Raid dungeons', value: 'dungeons', description: 'Raid dungeons' },
+                { label: '🌀 Portal', value: 'portals', description: 'Portal challenges' },
+                { label: '🐉 Boss Raids', value: 'raids', description: 'Boss Raids' },
+                { label: '🌠 Rifts', value: 'rift', description: 'Rift battles' }
             ],
             'als': [
-                { label: 'Story', value: 'story', description: 'Main story progression' },
-                { label: 'Legend Stages', value: 'legend-stages', description: 'Challenge stages' },
-                { label: 'Raids', value: 'raids', description: 'Raid battles' },
-                { label: 'Dungeons', value: 'dungeons', description: 'Dungeon runs' },
-                { label: 'Survival', value: 'survival', description: 'Survival mode' },
-                { label: 'Breach', value: 'breach', description: 'Breach missions' },
-                { label: 'Portals', value: 'portals', description: 'Portal challenges' }
+                { label: '📚 Story', value: 'story', description: 'Main story progression' },
+                { label: '♾️ Infinite', value: 'inf', description: 'Infinite mode' },
+                { label: '⚔️ Raids', value: 'raids', description: 'Raid battles' },
+                { label: '🏆 Challenges', value: 'towers', description: 'Challenge content' },
+                { label: '🎤 Portals', value: 'portals', description: 'Portal challenges' },
+                { label: '🪨 Cavens', value: 'breach', description: 'Cavens missions' },
+                { label: '👑 Legend Stages', value: 'legend-stages', description: 'Legend stages' },
+                { label: '💀 Dungeons', value: 'dungeons', description: 'Dungeon runs' },
+                { label: '🩹 Survival', value: 'survival', description: 'Survival mode' }
             ]
         };
         
