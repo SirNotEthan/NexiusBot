@@ -144,6 +144,25 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         const deferred = await safeDeferReply(interaction, { ephemeral: true });
         if (!deferred) return;
 
+        if (ticketType === 'regular') {
+            const db = new Database();
+            await db.connect();
+
+            try {
+                const messageStats = await db.getUserMessageStats(interaction.user.id);
+                const messageCount = messageStats?.message_count || 0;
+
+                if (messageCount < 50) {
+                    await safeEditReply(interaction, {
+                        content: `❌ **Message Requirement Not Met**\n\nYou currently have **${messageCount}** messages today. You need at least **50 messages** to request a free carry.\n\n*Send more messages in the server and try again!*`
+                    });
+                    return;
+                }
+            } finally {
+                await db.close();
+            }
+        }
+
         const game = interaction.options.getString('game', true);
 
         const ticketData: VouchTicketData = {
