@@ -61,14 +61,12 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         }
         
         if (messageCount < 50) {
-            embed.setDescription("❌ **You need at least 50 messages today to use free carries.**\n\nStart chatting in the server to unlock free carry requests!");
+            embed.setDescription("**You need at least 50 messages today to use free carries.**\n\nStart chatting in the server to unlock free carry requests!\n\nLimits reset daily at midnight UTC.");
         } else if (usageRecords.length === 0) {
-            embed.setDescription("✅ **You're eligible for free carries!**\n\nUse `/request-carry` to create your first request today.");
+            embed.setDescription("**You're eligible for free carries!**\n\nUse `/request-carry` to create your first request today.\n\nLimits reset daily at midnight UTC.");
         } else {
-            embed.setDescription("✅ **You're eligible for free carries!**\n\nCheck your limits above and use `/request-carry` to create requests.");
+            embed.setDescription("**You're eligible for free carries!**\n\nCheck your limits above and use `/request-carry` to create requests.\n\nLimits reset daily at midnight UTC.");
         }
-        
-        embed.setFooter({ text: "Limits reset daily at midnight UTC • 🟢 Available • 🔴 Limit reached" });
         
         await interaction.editReply({ embeds: [embed] });
         

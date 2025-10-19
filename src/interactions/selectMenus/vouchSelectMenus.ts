@@ -1,4 +1,4 @@
-import { StringSelectMenuInteraction, EmbedBuilder, Message, MessageFlags } from 'discord.js';
+import { StringSelectMenuInteraction, EmbedBuilder, Message, MessageFlags, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder } from 'discord.js';
 import { VouchTicketData, showTicketForm, createVouchTicketComponents } from '../../commands/vouch/request-carry';
 import { createVouchReasonModal, processVouch } from '../../commands/vouch/vouch';
 
@@ -64,10 +64,11 @@ function parseTicketDataFromInteraction(interaction: StringSelectMenuInteraction
             ticketData.selectedHelper = helperMatch[1];
         }
 
-        // Parse ROBLOX username
-        const robloxMatch = fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`([^`]+)\`\`/);
+        // Parse ROBLOX username - updated regex to match the format with triple backticks
+        const robloxMatch = fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`\`([^`]+)\`\`\`/) ||
+                           fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`([^`]+)\`\`/);
         if (robloxMatch && robloxMatch[1]) {
-            ticketData.robloxUsername = robloxMatch[1];
+            ticketData.robloxUsername = robloxMatch[1].trim();
         }
 
         console.log('[SELECT_PARSE_DEBUG] Parsed ticket data:', ticketData);
@@ -135,21 +136,144 @@ export async function handlePaidHelperSelection(interaction: StringSelectMenuInt
     await showTicketForm(interaction, ticketData);
 }
 
+export async function handleVouchTicketSelection(interaction: StringSelectMenuInteraction): Promise<void> {
+    const parts = interaction.customId.split('_');
+    // vouch_ticket_select_${userId}_${helperId}
+    const userId = parts[3];
+    const helperId = parts[4];
+
+    if (interaction.user.id !== userId) {
+        await interaction.reply({ content: "❌ This selection is not for you!", flags: MessageFlags.Ephemeral });
+        return;
+    }
+
+    // CRITICAL: Defer the update IMMEDIATELY to prevent interaction timeout
+    // Discord requires a response within 3 seconds
+    await interaction.deferUpdate();
+
+    const ticketNumber = parseInt(interaction.values[0]);
+
+    try {
+        const Database = (await import('../../database/database')).default;
+        const db = new Database();
+        await db.connect();
+
+        try {
+            const ticket = await db.getTicket(ticketNumber.toString());
+            if (!ticket) {
+                await interaction.followUp({
+                    content: "❌ **Ticket not found.**",
+                    flags: MessageFlags.Ephemeral
+                });
+                return;
+            }
+
+            const helper = await interaction.client.users.fetch(helperId);
+
+            // Create the rating selection modal
+            const embed = new EmbedBuilder()
+                .setTitle("⭐ Rate Your Experience")
+                .setDescription(`How would you rate the help you received from **${helper.tag}** on ticket #${ticketNumber}?\n\nSelect a rating from 1-5 stars:`)
+                .setColor(0x5865f2);
+
+            const ratingOptions = [
+                { label: '⭐ 1 Star - Poor', value: '1', description: 'Very unsatisfied with the help' },
+                { label: '⭐⭐ 2 Stars - Below Average', value: '2', description: 'Unsatisfied with the help' },
+                { label: '⭐⭐⭐ 3 Stars - Average', value: '3', description: 'Neutral about the help' },
+                { label: '⭐⭐⭐⭐ 4 Stars - Good', value: '4', description: 'Satisfied with the help' },
+                { label: '⭐⭐⭐⭐⭐ 5 Stars - Excellent', value: '5', description: 'Very satisfied with the help' }
+            ];
+
+            const selectMenu = new StringSelectMenuBuilder()
+                .setCustomId(`vouch_rating_${userId}_${helperId}_${ticketNumber}_${ticket.type}`)
+                .setPlaceholder('Choose a rating...')
+                .addOptions(ratingOptions.map(option =>
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel(option.label)
+                        .setValue(option.value)
+                        .setDescription(option.description)
+                ));
+
+            const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+            await interaction.editReply({
+                embeds: [embed],
+                components: [row]
+            });
+
+        } finally {
+            await db.close();
+        }
+    } catch (error) {
+        console.error('Error handling ticket selection:', error);
+        await interaction.followUp({
+            content: "❌ **Failed to process selection.** Please try again.",
+            flags: MessageFlags.Ephemeral
+        });
+    }
+}
+
 export async function handleVouchRatingSelection(interaction: StringSelectMenuInteraction): Promise<void> {
     const parts = interaction.customId.split('_');
     const userId = parts[2];
     const helperId = parts[3];
-    const ticketId = parseInt(parts[4]);
+    const ticketIdString = parts[4]; // e.g., "ALS-14" or just "14"
     const ticketType = parts[5] as 'regular' | 'paid';
-    
+
+    console.log('[VOUCH_RATING_DEBUG] CustomId:', interaction.customId);
+    console.log('[VOUCH_RATING_DEBUG] Parsed userId:', userId);
+    console.log('[VOUCH_RATING_DEBUG] Parsed helperId:', helperId);
+    console.log('[VOUCH_RATING_DEBUG] Parsed ticketIdString:', ticketIdString);
+    console.log('[VOUCH_RATING_DEBUG] Parsed ticketType:', ticketType);
+
+    // Quick validation checks before showing modal
     if (interaction.user.id !== userId) {
         await interaction.reply({ content: "❌ This rating is not for you!", flags: MessageFlags.Ephemeral });
         return;
     }
 
+    // Parse ticket ID - handle both numeric IDs and game-prefixed IDs
+    let ticketId: number;
+    if (ticketIdString.includes('-')) {
+        // Format: "ALS-14" or "AV-23"
+        const ticketNumber = ticketIdString.split('-')[1];
+        ticketId = parseInt(ticketNumber);
+    } else {
+        // Format: "14" (just a number)
+        ticketId = parseInt(ticketIdString);
+    }
+
+    console.log('[VOUCH_RATING_DEBUG] Final ticketId:', ticketId);
+
+    if (isNaN(ticketId)) {
+        console.error('[VOUCH_RATING_DEBUG] Invalid ticket ID parsed:', ticketIdString);
+        await interaction.reply({
+            content: "❌ Failed to process rating. Invalid ticket ID.",
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
     const rating = parseInt(interaction.values[0]);
-    const modal = createVouchReasonModal(userId, helperId, rating, ticketId, ticketType);
-    await interaction.showModal(modal);
+
+    try {
+        // CRITICAL: Show modal IMMEDIATELY to prevent interaction timeout
+        // All validations must happen before this point
+        const modal = createVouchReasonModal(userId, helperId, rating, ticketId, ticketType);
+        await interaction.showModal(modal);
+    } catch (error) {
+        console.error('[VOUCH_RATING_DEBUG] Error showing modal:', error);
+        // If showing modal fails, the interaction may have already expired
+        // Try to send an ephemeral message, but this might also fail
+        try {
+            await interaction.reply({
+                content: "❌ Failed to show rating form. Please try again.",
+                flags: MessageFlags.Ephemeral
+            });
+        } catch (replyError) {
+            console.error('[VOUCH_RATING_DEBUG] Could not send error reply:', replyError);
+        }
+    }
 }
 
 async function updateVouchTicketEmbed(interaction: any, ticketData: VouchTicketData): Promise<void> {

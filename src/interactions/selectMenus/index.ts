@@ -1,1 +1,1 @@
-export { handleVouchGamemodeSelection, handlePaidHelperSelection, handleVouchRatingSelection } from './vouchSelectMenus';
+export { handleVouchGamemodeSelection, handlePaidHelperSelection, handleVouchRatingSelection, handleVouchTicketSelection } from './vouchSelectMenus';

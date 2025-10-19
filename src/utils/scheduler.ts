@@ -81,29 +81,9 @@ export class WeeklyScheduler {
     }
 
     private async removeExpiredPaidHelperBios(): Promise<void> {
-        const db = new Database();
-        await db.connect();
-
-        try {
-            const paidHelpers = await db.getAllPaidHelpers();
-            const now = Date.now();
-            const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
-
-            for (const paidHelper of paidHelpers) {
-                if (paidHelper.bio_set_date < oneWeekAgo) {
-                    await db.updatePaidHelper(paidHelper.user_id, {
-                        bio: '[EXPIRED - Weekly requirement not met]'
-                    });
-                }
-            }
-
-            console.log('✅ Expired paid helper bios cleaned up');
-
-        } catch (error) {
-            console.error('Error removing expired paid helper bios:', error);
-        } finally {
-            await db.close();
-        }
+        // Bio functionality removed - paid helpers are now managed by staff only
+        // This method is kept as a placeholder for potential future cleanup tasks
+        console.log('ℹ️ Bio cleanup skipped (feature removed)');
     }
 
     async forceWeeklyReset(): Promise<void> {

@@ -62,7 +62,7 @@ export class RequestCarryBuilder {
         // Professional header without emojis
         const typeLabel = this.data.type === 'paid' ? 'Paid' : 'Regular';
         const gameDisplay = this.data.game ? this.getGameDisplayName(this.data.game) : 'Game';
-        
+
         const headerText = new TextDisplayBuilder()
             .setContent(`# Request ${typeLabel} Carry - ${gameDisplay}\n**Complete the form below to submit your carry request**`);
         components.push(headerText);
@@ -71,18 +71,24 @@ export class RequestCarryBuilder {
         // Progress tracking section
         const progress = this.calculateProgress();
         const progressPercent = Math.round((progress.completed / progress.total) * 100);
-        const progressBar = "█".repeat(Math.floor(progress.completed / progress.total * 10)) + 
+        const progressBar = "█".repeat(Math.floor(progress.completed / progress.total * 10)) +
                            "░".repeat(10 - Math.floor(progress.completed / progress.total * 10));
-        
-        const progressSection = new SectionBuilder();
-        (progressSection as any).data = { content: `**Form Progress: ${progress.completed}/${progress.total} fields completed (${progressPercent}%)**\n\`${progressBar}\`` };
-        components.push(progressSection);
+
+        const progressText = new TextDisplayBuilder()
+            .setContent(`**Form Progress: ${progress.completed}/${progress.total} fields completed (${progressPercent}%)**\n\`${progressBar}\``);
+        components.push(progressText);
         components.push(new SeparatorBuilder());
 
-        // Main form container with all fields and controls
+        // Main form container with fields only (no ActionRows inside)
         const mainContainer = new ContainerBuilder();
-        this.addFormFieldsAndControlsV2(mainContainer);
+        if (!(mainContainer as any).components) {
+            (mainContainer as any).components = [];
+        }
+        this.addFormFieldsV2(mainContainer);
         components.push(mainContainer);
+
+        // Add interactive controls (ActionRows) at the top level, not in containers
+        this.addInteractiveControlsV2(components);
 
         return {
             components,
@@ -91,74 +97,79 @@ export class RequestCarryBuilder {
     }
 
     /**
-     * Add form fields and controls to the main container
+     * Add form fields only (no interactive controls)
      */
-    private addFormFieldsAndControlsV2(container: ContainerBuilder): void {
+    private addFormFieldsV2(container: ContainerBuilder): void {
+        // Ensure container has components array
+        if (!(container as any).components) {
+            (container as any).components = [];
+        }
+
         // Form fields section
         const fieldsContainer = new ContainerBuilder();
+        if (!(fieldsContainer as any).components) {
+            (fieldsContainer as any).components = [];
+        }
         
         // Game field
         const gameStatus = this.data.game ? 'SET' : 'REQUIRED';
         const gameDisplay = this.data.game ? this.getGameDisplayName(this.data.game) : 'Game will be pre-selected based on your command choice';
-        const gameSection = new SectionBuilder();
-        (gameSection as any).data = { content: `**Game** [${gameStatus}]\n${gameDisplay}` };
-        fieldsContainer.components.push(gameSection);
+        const gameText = new TextDisplayBuilder()
+            .setContent(`**Game** [${gameStatus}]\n${gameDisplay}`);
+        fieldsContainer.components.push(gameText);
 
         // Gamemode field - only show if game is selected
         if (this.data.game) {
             const gamemodeStatus = this.data.gamemode ? 'SET' : 'REQUIRED';
             const gamemodeDisplay = this.data.gamemode ? this.getGamemodeDisplayName(this.data.gamemode) : 'Select a gamemode from the dropdown below';
-            const gamemodeSection = new SectionBuilder();
-            (gamemodeSection as any).data = { content: `**Gamemode** [${gamemodeStatus}]\n${gamemodeDisplay}` };
-            fieldsContainer.components.push(gamemodeSection);
+            const gamemodeText = new TextDisplayBuilder()
+                .setContent(`**Gamemode** [${gamemodeStatus}]\n${gamemodeDisplay}`);
+            fieldsContainer.components.push(gamemodeText);
         }
 
         // Goal field
         const goalStatus = this.data.goal ? 'SET' : 'REQUIRED';
         const goalDisplay = this.data.goal || 'Click "Set Goal" to describe what you need help with';
-        const goalSection = new SectionBuilder();
-        (goalSection as any).data = { content: `**Goal Description** [${goalStatus}]\n${goalDisplay}` };
-        fieldsContainer.components.push(goalSection);
+        const goalText = new TextDisplayBuilder()
+            .setContent(`**Goal Description** [${goalStatus}]\n${goalDisplay}`);
+        fieldsContainer.components.push(goalText);
 
         // Links field
         const linksStatus = this.data.canJoinLinks !== undefined ? 'SET' : 'REQUIRED';
-        const linksDisplay = this.data.canJoinLinks !== undefined 
+        const linksDisplay = this.data.canJoinLinks !== undefined
             ? (this.data.canJoinLinks ? 'Yes - Can join Discord voice channels and links' : 'No - Cannot join Discord voice channels and links')
             : 'Select whether you can join Discord voice channels and links';
-        const linksSection = new SectionBuilder();
-        (linksSection as any).data = { content: `**Can Join Voice/Links** [${linksStatus}]\n${linksDisplay}` };
-        fieldsContainer.components.push(linksSection);
+        const linksText = new TextDisplayBuilder()
+            .setContent(`**Can Join Voice/Links** [${linksStatus}]\n${linksDisplay}`);
+        fieldsContainer.components.push(linksText);
 
         // Selected helper (for paid carries)
         if (this.data.type === 'paid') {
             const helperStatus = this.data.selectedHelper ? 'SET' : 'OPTIONAL';
-            const helperDisplay = this.data.selectedHelper 
+            const helperDisplay = this.data.selectedHelper
                 ? `<@${this.data.selectedHelper}>`
                 : 'Select a preferred helper (optional)';
-            const helperSection = new SectionBuilder();
-            (helperSection as any).data = { content: `**Preferred Helper** [${helperStatus}]\n${helperDisplay}` };
-            fieldsContainer.components.push(helperSection);
+            const helperText = new TextDisplayBuilder()
+                .setContent(`**Preferred Helper** [${helperStatus}]\n${helperDisplay}`);
+            fieldsContainer.components.push(helperText);
         }
 
-        container.components.push(...fieldsContainer.components);
-        container.components.push(new SeparatorBuilder());
-
-        // Controls container
-        const controlsContainer = new ContainerBuilder();
-        this.addControlsToContainer(controlsContainer);
-        container.components.push(...controlsContainer.components);
+        // Only add fields if they exist
+        if (fieldsContainer.components && fieldsContainer.components.length > 0) {
+            container.components.push(...fieldsContainer.components);
+        }
     }
 
     /**
-     * Add controls to a container
+     * Add interactive controls (ActionRows) directly to components array
      */
-    private addControlsToContainer(container: ContainerBuilder): void {
+    private addInteractiveControlsV2(components: any[]): void {
         // Game/Gamemode selection
         if (this.data.game) {
             const gamemodeSelect = this.createGamemodeSelect();
             if (gamemodeSelect) {
                 const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(gamemodeSelect);
-                container.components.push(selectRow);
+                components.push(selectRow);
             }
         }
 
@@ -166,15 +177,31 @@ export class RequestCarryBuilder {
         const actionButtons = this.createActionButtons();
         if (actionButtons.length > 0) {
             const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(actionButtons);
-            container.components.push(actionRow);
+            components.push(actionRow);
         }
 
         // Secondary buttons row
         const secondaryButtons = this.createSecondaryButtons();
         if (secondaryButtons.length > 0) {
             const secondaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(secondaryButtons);
-            container.components.push(secondaryRow);
+            components.push(secondaryRow);
         }
+    }
+
+    /**
+     * Add controls to a container
+     */
+    private addControlsToContainer(container: ContainerBuilder): void {
+        // Ensure container has components array
+        if (!(container as any).components) {
+            (container as any).components = [];
+        }
+
+        // Note: ContainerBuilder in Components V2 expects Section/Text/etc builders, not ActionRows
+        // ActionRows should be added at the top level, not inside containers
+
+        // We need to restructure this - Components V2 doesn't nest ActionRows in containers
+        // Instead, we'll add action rows directly to the components array at the top level
     }
 
     /**

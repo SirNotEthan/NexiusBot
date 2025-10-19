@@ -142,7 +142,7 @@ export class RequestCarryButtonHandler {
      */
     private static async handleSubmitButton(interaction: ButtonInteraction, userId: string): Promise<void> {
         const data = this.getSessionData(userId);
-        
+
         // Validate form completion
         if (!RequestCarryUtils.isFormComplete(data)) {
             await safeReply(interaction, {
@@ -152,6 +152,36 @@ export class RequestCarryButtonHandler {
             return;
         }
 
+        // Check message requirement for regular carries
+        if (data.type === 'regular') {
+            try {
+                const Database = (await import('../../../../database/database')).default;
+                const db = new Database();
+                await db.connect();
+
+                try {
+                    const messageStats = await db.getUserMessageStats(userId);
+                    const messageCount = messageStats?.message_count || 0;
+
+                    if (messageCount < 50) {
+                        await safeReply(interaction, {
+                            content: `❌ **Not Eligible for Free Carries**\n\nYou need **50 messages today** to create free carry requests.\n\nCurrent: **${messageCount}/50 messages**\n\n💬 Chat more in the server to unlock this feature!`,
+                            ephemeral: true
+                        });
+                        return;
+                    }
+                } finally {
+                    await db.close();
+                }
+            } catch (error) {
+                console.error('Error checking message requirement:', error);
+                await safeReply(interaction, {
+                    content: "❌ Failed to verify your eligibility. Please try again later.",
+                    ephemeral: true
+                });
+                return;
+            }
+        }
 
         try {
             // Create the ticket
@@ -215,23 +245,8 @@ export class RequestCarryButtonHandler {
      * Update the interface with new data using the compatible system
      */
     private static async updateInterfaceCompatible(interaction: ButtonInteraction, userId: string, data: RequestCarryData): Promise<void> {
-        // Convert to VouchTicketData format for compatibility
-        const { createVouchTicketComponents } = await import('../../request-carry');
-        const ticketData = {
-            type: data.type,
-            game: data.game,
-            gamemode: data.gamemode,
-            goal: data.goal,
-            canJoinLinks: data.canJoinLinks,
-            selectedHelper: data.selectedHelper
-        };
-        
-        const components = createVouchTicketComponents(ticketData, userId);
-
-        await safeUpdate(interaction, {
-            components: components,
-            flags: MessageFlags.IsComponentsV2
-        });
+        // Use the new builder directly
+        await this.updateInterface(interaction, userId, data);
     }
 
     /**

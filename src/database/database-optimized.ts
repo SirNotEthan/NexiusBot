@@ -653,7 +653,7 @@ export const getDatabase = async (): Promise<DatabaseManager> => {
                 console.warn('⚠️ Database connection unhealthy, attempting reconnection...');
                 databaseInstance?.connect().catch(console.error);
             }
-        }, 30000); // Check every 30 seconds
+        }, 30000);
     }
     return databaseInstance;
 };

@@ -28,7 +28,8 @@ import { handleMiddlemanButtons } from './buttons/middlemanButtons';
 import {
     handleVouchGamemodeSelection,
     handlePaidHelperSelection,
-    handleVouchRatingSelection
+    handleVouchRatingSelection,
+    handleVouchTicketSelection
 } from './selectMenus';
 
 import {
@@ -301,6 +302,11 @@ export class InteractionRouter {
             
             if (customId.startsWith('vouch_rating_')) {
                 await handleVouchRatingSelection(interaction);
+                return;
+            }
+
+            if (customId.startsWith('vouch_ticket_select_')) {
+                await handleVouchTicketSelection(interaction);
                 return;
             }
 

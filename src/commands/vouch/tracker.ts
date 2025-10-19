@@ -56,51 +56,42 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 async function displayTrackerBoard(interaction: ChatInputCommandInteraction): Promise<void> {
     const db = new Database();
     await db.connect();
-    
+
     try {
         const paidHelpers = await db.getAllPaidHelpers();
-        
-        const now = Date.now();
-        const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
-        const activePaidHelpers = paidHelpers.filter(helper => helper.bio_set_date > oneWeekAgo);
-        
-        if (activePaidHelpers.length === 0) {
+
+        if (paidHelpers.length === 0) {
             const embed = new EmbedBuilder()
                 .setTitle("💳 Paid Helper Tracker Board")
-                .setDescription("No paid helpers are currently available on the tracker board.\n\n*Helpers need 10 weekly vouches to set their bio and appear here.*")
+                .setDescription("No paid helpers are currently registered.\n\n*Contact staff to be registered as a paid helper.*")
                 .setColor(0x99aab5)
-                .setFooter({ text: "Bios expire weekly and must be renewed" });
-            
+                .setFooter({ text: "Use /manage-paid-helpers to manage helpers (staff only)" });
+
             await interaction.reply({ embeds: [embed] });
             return;
         }
 
         const embed = new EmbedBuilder()
             .setTitle("💳 Paid Helper Tracker Board")
-            .setDescription("Available paid helpers for commission work:")
+            .setDescription("Registered paid helpers:")
             .setColor(0x00d4aa)
             .setTimestamp();
 
-        const sortedHelpers = activePaidHelpers.sort((a, b) => b.bio_set_date - a.bio_set_date);
-
         let description = '';
-        for (let i = 0; i < sortedHelpers.length && i < 10; i++) {
-            const helper = sortedHelpers[i];
-            const daysAgo = Math.floor((now - helper.bio_set_date) / (1000 * 60 * 60 * 24));
-            const expiresIn = 7 - daysAgo;
-            
+        for (let i = 0; i < paidHelpers.length && i < 10; i++) {
+            const helper = paidHelpers[i];
+
             const helperStats = await db.getHelper(helper.user_id);
             const vouchCount = helperStats?.total_vouches || 0;
             const rating = helperStats?.average_rating?.toFixed(1) || '0.0';
-            
+
             description += `**${i + 1}. ${helper.user_tag}**\n`;
-            description += `📊 ${vouchCount} vouches | ⭐ ${rating}/5.0 | ⏰ ${expiresIn}d left\n`;
-            description += `💼 *${helper.bio}*\n\n`;
+            description += `📊 ${vouchCount} vouches | ⭐ ${rating}/5.0\n\n`;
         }
 
         embed.setDescription(description);
-        embed.setFooter({ 
-            text: `${sortedHelpers.length} active paid helpers | Bios expire weekly` 
+        embed.setFooter({
+            text: `${paidHelpers.length} registered paid helpers`
         });
 
         const refreshButton = new ButtonBuilder()
@@ -169,40 +160,7 @@ function createBioModal(userId: string): ModalBuilder {
     return modal;
 }
 
-export async function processBioSetting(userId: string, userTag: string, bio: string): Promise<void> {
-    const db = new Database();
-    await db.connect();
-    
-    try {
-        const helper = await db.getHelper(userId);
-        if (!helper || helper.weekly_vouches < 10) {
-            throw new Error('Helper not qualified for paid tracker');
-        }
-
-        const existingPaidHelper = await db.getPaidHelper(userId);
-        
-        if (existingPaidHelper) {
-            await db.updatePaidHelper(userId, {
-                bio: bio,
-                bio_set_date: Date.now(),
-                vouches_for_access: helper.weekly_vouches
-            });
-        } else {
-            await db.createPaidHelper({
-                user_id: userId,
-                user_tag: userTag,
-                bio: bio,
-                bio_set_date: Date.now(),
-                vouches_for_access: helper.weekly_vouches
-            });
-        }
-
-        await db.updateHelper(userId, { is_paid_helper: true });
-
-    } finally {
-        await db.close();
-    }
-}
+// Bio functionality removed - now managed by staff only via /manage-paid-helpers
 
 export async function refreshTrackerBoard(interaction: any): Promise<void> {
     await displayTrackerBoard(interaction);

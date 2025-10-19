@@ -20,12 +20,6 @@ const data = new SlashCommandBuilder()
                     .setDescription('User to register as paid helper')
                     .setRequired(true)
             )
-            .addStringOption(option =>
-                option.setName('bio')
-                    .setDescription('Bio describing services and payment')
-                    .setRequired(true)
-                    .setMaxLength(300)
-            )
     )
     .addSubcommand(subcommand =>
         subcommand
@@ -55,28 +49,6 @@ const data = new SlashCommandBuilder()
                 option.setName('user')
                     .setDescription('Helper to promote (must have 10+ regular vouches)')
                     .setRequired(true)
-            )
-            .addStringOption(option =>
-                option.setName('bio')
-                    .setDescription('Bio describing services and payment')
-                    .setRequired(true)
-                    .setMaxLength(300)
-            )
-    )
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName('update-bio')
-            .setDescription('Update a paid helper\'s bio')
-            .addUserOption(option =>
-                option.setName('user')
-                    .setDescription('User whose bio to update')
-                    .setRequired(true)
-            )
-            .addStringOption(option =>
-                option.setName('bio')
-                    .setDescription('New bio describing services and payment')
-                    .setRequired(true)
-                    .setMaxLength(300)
             )
     );
 
@@ -108,9 +80,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
             case 'promote':
                 await handlePromoteHelper(interaction);
                 break;
-            case 'update-bio':
-                await handleUpdateBio(interaction);
-                break;
             default:
                 await interaction.reply({ 
                     content: '❌ Unknown subcommand.', 
@@ -125,7 +94,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
 async function handleAddPaidHelper(interaction: ChatInputCommandInteraction): Promise<void> {
     const user = interaction.options.getUser('user', true);
-    const bio = interaction.options.getString('bio', true);
 
     const db = new Database();
     await db.connect();
@@ -136,11 +104,7 @@ async function handleAddPaidHelper(interaction: ChatInputCommandInteraction): Pr
             const embed = new EmbedBuilder()
                 .setTitle("⚠️ User Already Registered")
                 .setDescription(`${user.tag} is already registered as a paid helper.`)
-                .setColor(0xffa500)
-                .addFields([
-                    { name: '💼 Current Bio', value: existingPaidHelper.bio, inline: false },
-                    { name: '💡 Tip', value: 'Use `/manage-paid-helpers update-bio` to modify their bio.', inline: false }
-                ]);
+                .setColor(0xffa500);
 
             await interaction.reply({ embeds: [embed], ephemeral: true });
             return;
@@ -170,9 +134,7 @@ async function handleAddPaidHelper(interaction: ChatInputCommandInteraction): Pr
         await db.createPaidHelper({
             user_id: user.id,
             user_tag: user.tag,
-            bio: bio,
-            bio_set_date: Date.now(),
-            vouches_for_access: 0 
+            vouches_for_access: 0,
         });
 
         const successEmbed = new EmbedBuilder()
@@ -180,9 +142,8 @@ async function handleAddPaidHelper(interaction: ChatInputCommandInteraction): Pr
             .setDescription(`Successfully registered ${user.tag} as a paid helper!`)
             .setThumbnail(user.displayAvatarURL())
             .addFields([
-                { name: '👤 User', value: `${user} (${user.tag})`, inline: true },
-                { name: '🆔 User ID', value: user.id, inline: true },
-                { name: '💼 Bio', value: bio, inline: false }
+                { name: 'User', value: `${user} (${user.tag})`, inline: true },
+                { name: 'User ID', value: user.id, inline: true },
             ])
             .setColor(0x00ff00)
             .setTimestamp();
@@ -213,7 +174,7 @@ async function handleRemovePaidHelper(interaction: ChatInputCommandInteraction):
             return;
         }
 
-        await db.updatePaidHelper(user.id, { bio: '[REMOVED BY STAFF]' });
+        // Remove paid helper status
         await db.updateHelper(user.id, { is_paid_helper: false });
 
         const successEmbed = new EmbedBuilder()
@@ -221,8 +182,7 @@ async function handleRemovePaidHelper(interaction: ChatInputCommandInteraction):
             .setDescription(`Successfully removed ${user.tag} from paid helpers list.`)
             .setThumbnail(user.displayAvatarURL())
             .addFields([
-                { name: '👤 User', value: `${user} (${user.tag})`, inline: true },
-                { name: '💼 Previous Bio', value: paidHelper.bio.substring(0, 100) + (paidHelper.bio.length > 100 ? '...' : ''), inline: false }
+                { name: '👤 User', value: `${user} (${user.tag})`, inline: true }
             ])
             .setColor(0xff6b6b)
             .setTimestamp();
@@ -240,9 +200,8 @@ async function handleListPaidHelpers(interaction: ChatInputCommandInteraction): 
 
     try {
         const paidHelpers = await db.getAllPaidHelpers();
-        const activePaidHelpers = paidHelpers.filter(helper => !helper.bio.includes('[REMOVED BY STAFF]'));
 
-        if (activePaidHelpers.length === 0) {
+        if (paidHelpers.length === 0) {
             const embed = new EmbedBuilder()
                 .setTitle("📋 Paid Helpers List")
                 .setDescription("No paid helpers are currently registered.")
@@ -255,26 +214,25 @@ async function handleListPaidHelpers(interaction: ChatInputCommandInteraction): 
 
         const embed = new EmbedBuilder()
             .setTitle("📋 Registered Paid Helpers")
-            .setDescription(`${activePaidHelpers.length} paid helper${activePaidHelpers.length !== 1 ? 's' : ''} currently registered:`)
+            .setDescription(`${paidHelpers.length} paid helper${paidHelpers.length !== 1 ? 's' : ''} currently registered:`)
             .setColor(0x00d4aa)
             .setTimestamp();
 
-        for (let i = 0; i < Math.min(activePaidHelpers.length, 10); i++) {
-            const helper = activePaidHelpers[i];
-            const daysAgo = Math.floor((Date.now() - helper.bio_set_date) / (1000 * 60 * 60 * 24));
-            
+        for (let i = 0; i < Math.min(paidHelpers.length, 10); i++) {
+            const helper = paidHelpers[i];
+
             embed.addFields([
                 {
                     name: `${i + 1}. ${helper.user_tag}`,
-                    value: `**Bio:** ${helper.bio}\n**Added:** ${daysAgo} days ago\n**ID:** \`${helper.user_id}\``,
+                    value: `**User ID:** \`${helper.user_id}\``,
                     inline: false
                 }
             ]);
         }
 
-        if (activePaidHelpers.length > 10) {
-            embed.setFooter({ 
-                text: `Showing first 10 of ${activePaidHelpers.length} paid helpers` 
+        if (paidHelpers.length > 10) {
+            embed.setFooter({
+                text: `Showing first 10 of ${paidHelpers.length} paid helpers`
             });
         }
 
@@ -285,52 +243,7 @@ async function handleListPaidHelpers(interaction: ChatInputCommandInteraction): 
     }
 }
 
-async function handleUpdateBio(interaction: ChatInputCommandInteraction): Promise<void> {
-    const user = interaction.options.getUser('user', true);
-    const newBio = interaction.options.getString('bio', true);
-
-    const db = new Database();
-    await db.connect();
-
-    try {
-        const paidHelper = await db.getPaidHelper(user.id);
-        
-        if (!paidHelper || paidHelper.bio.includes('[REMOVED BY STAFF]')) {
-            const embed = new EmbedBuilder()
-                .setTitle("❌ Not a Paid Helper")
-                .setDescription(`${user.tag} is not registered as a paid helper.`)
-                .setColor(0xff6b6b);
-
-            await interaction.reply({ embeds: [embed], ephemeral: true });
-            return;
-        }
-
-        const oldBio = paidHelper.bio;
-
-        await db.updatePaidHelper(user.id, {
-            bio: newBio,
-            bio_set_date: Date.now(),
-            user_tag: user.tag
-        });
-
-        const successEmbed = new EmbedBuilder()
-            .setTitle("✅ Bio Updated")
-            .setDescription(`Successfully updated bio for ${user.tag}`)
-            .setThumbnail(user.displayAvatarURL())
-            .addFields([
-                { name: '👤 User', value: `${user} (${user.tag})`, inline: false },
-                { name: '📝 Old Bio', value: oldBio, inline: false },
-                { name: '💼 New Bio', value: newBio, inline: false }
-            ])
-            .setColor(0x00d4aa)
-            .setTimestamp();
-
-        await interaction.reply({ embeds: [successEmbed] });
-
-    } finally {
-        await db.close();
-    }
-}
+// Bio functionality removed - no longer needed
 
 async function handleCommandError(interaction: ChatInputCommandInteraction, error: any): Promise<void> {
     console.error("Manage paid helpers command error:", error);
@@ -402,7 +315,6 @@ async function handleListEligibleHelpers(interaction: ChatInputCommandInteractio
 
 async function handlePromoteHelper(interaction: ChatInputCommandInteraction): Promise<void> {
     const user = interaction.options.getUser('user', true);
-    const bio = interaction.options.getString('bio', true);
 
     const db = new Database();
     await db.connect();
@@ -434,17 +346,15 @@ async function handlePromoteHelper(interaction: ChatInputCommandInteraction): Pr
             return;
         }
 
-        await db.updateHelper(user.id, { 
+        await db.updateHelper(user.id, {
             is_paid_helper: true,
-            user_tag: user.tag 
+            user_tag: user.tag
         });
 
         await db.createPaidHelper({
             user_id: user.id,
             user_tag: user.tag,
-            bio: bio,
-            bio_set_date: Date.now(),
-            vouches_for_access: 10 
+            vouches_for_access: 10
         });
 
         const successEmbed = new EmbedBuilder()
@@ -453,8 +363,7 @@ async function handlePromoteHelper(interaction: ChatInputCommandInteraction): Pr
             .setThumbnail(user.displayAvatarURL())
             .addFields([
                 { name: '👤 User', value: `${user} (${user.tag})`, inline: true },
-                { name: '📊 Qualification', value: `Earned ${eligibility.currentVouches} regular vouches this week`, inline: true },
-                { name: '💼 Bio', value: bio, inline: false }
+                { name: '📊 Qualification', value: `Earned ${eligibility.currentVouches} regular vouches this week`, inline: true }
             ])
             .setColor(0x00ff00)
             .setTimestamp();

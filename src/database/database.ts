@@ -61,8 +61,6 @@ export interface PaidHelperRecord {
     id: number;
     user_id: string;
     user_tag: string;
-    bio: string;
-    bio_set_date: number;
     vouches_for_access: number;
     created_at: number;
     updated_at: number;
@@ -177,7 +175,6 @@ class DatabaseManager extends EventEmitter {
             this.prepareStatements();
             this.isConnected = true;
 
-            // Ensure ticket counters are in sync with actual tickets (after connection is fully established)
             await this.syncTicketCounters();
 
             this.emit('connected');
@@ -534,47 +531,47 @@ class DatabaseManager extends EventEmitter {
                     console.log(`[ATOMIC_TICKET_CREATE] Attempt ${attempt} for game ${ticket.game}`);
 
                     // First, check what the highest existing ticket number is for this game
+                    // Handle both old format (numeric only) and new format (GAME-N)
+                    const gamePrefixUpper = ticket.game?.toUpperCase() || 'TICKET';
                     const maxTicketQuery = `
-                        SELECT CAST(ticket_number AS INTEGER) as max_ticket_num
+                        SELECT
+                            CASE
+                                WHEN ticket_number LIKE '${gamePrefixUpper}-%' THEN CAST(SUBSTR(ticket_number, ${gamePrefixUpper.length + 2}) AS INTEGER)
+                                WHEN ticket_number GLOB '[0-9]*' AND game = ? THEN CAST(ticket_number AS INTEGER)
+                                ELSE 0
+                            END as max_ticket_num
                         FROM tickets
-                        WHERE game = ? AND ticket_number GLOB '[0-9]*'
-                        ORDER BY CAST(ticket_number AS INTEGER) DESC
+                        WHERE game = ? AND (ticket_number LIKE '${gamePrefixUpper}-%' OR ticket_number GLOB '[0-9]*')
+                        ORDER BY max_ticket_num DESC
                         LIMIT 1
                     `;
-                    const maxTicketResult = this.db!.prepare(maxTicketQuery).get([ticket.game]) as { max_ticket_num: number } | undefined;
+                    const maxTicketResult = this.db!.prepare(maxTicketQuery).get([ticket.game, ticket.game]) as { max_ticket_num: number } | undefined;
                     const currentMaxTicket = maxTicketResult ? maxTicketResult.max_ticket_num : 0;
 
                     console.log(`[ATOMIC_TICKET_CREATE] Current max ticket number for ${ticket.game}: ${currentMaxTicket}`);
 
-                    // Ensure the counter is at least currentMaxTicket + 1
-                    const syncCounterQuery = `
+                    // Atomically get and increment the counter, ensuring it's at least currentMaxTicket + 1
+                    // This single query does both sync and increment in one operation
+                    const getAndIncrementQuery = `
                         INSERT INTO ticket_counters (game, counter, created_at, updated_at)
                         VALUES (?, ?, ?, ?)
                         ON CONFLICT(game) DO UPDATE SET
-                            counter = MAX(counter, ? + 1),
+                            counter = MAX(counter, ?) + 1,
                             updated_at = ?
+                        RETURNING counter
                     `;
 
-                    this.db!.prepare(syncCounterQuery).run([
+                    const counterResult = this.db!.prepare(getAndIncrementQuery).get([
                         ticket.game,
                         currentMaxTicket + 1,
                         now,
                         now,
                         currentMaxTicket,
                         now
-                    ]);
+                    ]) as { counter: number };
 
-                    // Now increment and get the next number atomically
-                    const incrementCounterQuery = `
-                        UPDATE ticket_counters
-                        SET counter = counter + 1, updated_at = ?
-                        WHERE game = ?
-                        RETURNING counter
-                    `;
-
-                    const counterResult = this.db!.prepare(incrementCounterQuery).get([now, ticket.game]) as { counter: number };
-
-                    nextTicketNumber = counterResult.counter.toString();
+                    // Use game-prefixed ticket number to ensure uniqueness across games
+                    nextTicketNumber = `${gamePrefixUpper}-${counterResult.counter}`;
                     console.log(`[ATOMIC_TICKET_CREATE] Generated ticket number ${nextTicketNumber} for game ${ticket.game}`);
 
                     // Now create the ticket with the atomically generated number
@@ -1000,8 +997,6 @@ class DatabaseManager extends EventEmitter {
             const result = this.db!.prepare(query).run([
                 paidHelper.user_id,
                 paidHelper.user_tag,
-                paidHelper.bio,
-                paidHelper.bio_set_date,
                 paidHelper.vouches_for_access,
                 now,
                 now
@@ -1102,6 +1097,25 @@ class DatabaseManager extends EventEmitter {
             console.log('✅ Monthly stats reset');
         } catch (error) {
             console.error('Error resetting monthly stats:', error);
+            throw error;
+        }
+    }
+
+    async resetDailyStats(): Promise<void> {
+        const yesterday = new Date();
+        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+        const yesterdayDate = yesterday.toISOString().split('T')[0];
+
+        try {
+            const deleteOldMessagesQuery = 'DELETE FROM user_messages WHERE date < ?';
+            this.db!.prepare(deleteOldMessagesQuery).run([yesterdayDate]);
+
+            const deleteOldCarryUsageQuery = 'DELETE FROM free_carry_usage WHERE date < ?';
+            this.db!.prepare(deleteOldCarryUsageQuery).run([yesterdayDate]);
+
+            console.log('✅ Daily stats reset (old records cleaned up)');
+        } catch (error) {
+            console.error('Error resetting daily stats:', error);
             throw error;
         }
     }

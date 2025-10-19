@@ -168,22 +168,13 @@ export class RequestCarrySelectMenuHandler {
      * Update the interface with new data
      */
     private static async updateInterface(interaction: StringSelectMenuInteraction, userId: string, data: RequestCarryData): Promise<void> {
-        // Use compatible system for now
-        const { createVouchTicketComponents } = await import('../../request-carry');
-        const ticketData = {
-            type: data.type,
-            game: data.game,
-            gamemode: data.gamemode,
-            goal: data.goal,
-            canJoinLinks: data.canJoinLinks,
-            selectedHelper: data.selectedHelper
-        };
-        
-        const components = createVouchTicketComponents(ticketData, userId);
+        // Use the builder directly
+        const builder = new RequestCarryBuilder(data, userId, true);
+        const response = builder.build();
 
         // Always update the original message, never create a reply
         await safeUpdate(interaction, {
-            components: components,
+            components: response.components,
             flags: MessageFlags.IsComponentsV2
         });
     }

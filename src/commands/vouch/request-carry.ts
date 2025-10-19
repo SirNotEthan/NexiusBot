@@ -478,7 +478,7 @@ export async function createVouchTicket(
         const typeLabel = ticketData.type === 'paid' ? 'Paid Help Ticket' : 'Regular Help Ticket';
         const statusText = ticketData.type === 'paid' && ticketData.selectedHelper ? '\n**Status:** Assigned' : '';
         const headerText = new TextDisplayBuilder()
-            .setContent(`# 🎫 Ticket Created\n**Request created by:** <@${userId}>\n**Type:** ${typeLabel}${statusText}`);
+            .setContent(`# 🎫 Ticket Created\n**Type:** ${typeLabel}${statusText}`);
         (mainContainer as any).components.push(headerText);
         (mainContainer as any).components.push(new SeparatorBuilder());
 
@@ -563,16 +563,33 @@ export async function createVouchTicket(
             flags: MessageFlags.IsComponentsV2
         });
 
+        // Send authorization container as a separate message
+        const authContainer = new ContainerBuilder();
+        if (!(authContainer as any).components) {
+            (authContainer as any).components = [];
+        }
+
+        const authSection = new TextDisplayBuilder()
+            .setContent(`<@${userId}> - Authorization needed for ticket closure`);
+        (authContainer as any).components.push(authSection);
+
+        await ticketChannel.send({
+            components: [authContainer],
+            flags: MessageFlags.IsComponentsV2
+        });
+
         if (ticketData.type === 'paid' && ticketData.selectedHelper) {
             await ticketChannel.send(`<@${ticketData.selectedHelper}> - You have been selected for this paid help request! This ticket has been automatically assigned to you.`);
         } else {
             const gameHelperRoleId = getGameHelperRoleId(ticketData.game!);
             if (gameHelperRoleId) {
-                await ticketChannel.send(`<@&${gameHelperRoleId}> New ${ticketData.type} ${getGameDisplayName(ticketData.game!)} carry ticket has been created`);
+                const pingMessage = await ticketChannel.send(`<@&${gameHelperRoleId}> New ${ticketData.type} ${getGameDisplayName(ticketData.game!)} carry ticket has been created`);
+                await pingMessage.delete();
             } else {
                 const helperRoleId = ticketData.type === 'paid' ? process.env.PAID_HELPER_ROLE_ID : process.env.HELPER_ROLE_ID;
                 if (helperRoleId) {
-                    await ticketChannel.send(`<@&${helperRoleId}> New ${ticketData.type} carry ticket has been created`);
+                    const pingMessage = await ticketChannel.send(`<@&${helperRoleId}> New ${ticketData.type} carry ticket has been created`);
+                    await pingMessage.delete();
                 }
             }
         }

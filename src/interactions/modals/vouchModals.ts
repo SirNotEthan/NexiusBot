@@ -1,7 +1,7 @@
 import { ModalSubmitInteraction, EmbedBuilder, ChannelType, MessageFlags } from 'discord.js';
 import { VouchTicketData } from '../../commands/vouch/request-carry';
 import { processVouch } from '../../commands/vouch/vouch';
-import { processBioSetting } from '../../commands/vouch/tracker';
+// import { processBioSetting } from '../../commands/vouch/tracker'; // Removed - bio feature disabled
 
 function parseTicketDataFromComponents(interaction: ModalSubmitInteraction): VouchTicketData {
     const ticketData: VouchTicketData = { type: 'regular' };
@@ -50,10 +50,11 @@ function parseTicketDataFromComponents(interaction: ModalSubmitInteraction): Vou
             ticketData.selectedHelper = helperMatch[1];
         }
 
-        // Parse ROBLOX username
-        const robloxMatch = fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`([^`]+)\`\`/);
+        // Parse ROBLOX username - updated regex to match the format with triple backticks
+        const robloxMatch = fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`\`([^`]+)\`\`\`/) ||
+                           fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`([^`]+)\`\`/);
         if (robloxMatch && robloxMatch[1]) {
-            ticketData.robloxUsername = robloxMatch[1];
+            ticketData.robloxUsername = robloxMatch[1].trim();
         }
 
         console.log('[MODAL_PARSE_DEBUG] Parsed ticket data:', ticketData);
@@ -188,33 +189,11 @@ export async function handleVouchReasonModal(interaction: ModalSubmitInteraction
 }
 
 export async function handlePaidBioModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const userId = interaction.customId.split('_')[3];
-    
-    if (interaction.user.id !== userId) {
-        await interaction.reply({ content: "❌ This bio form is not for you!", flags: MessageFlags.Ephemeral });
-        return;
-    }
-
-    const bio = interaction.fields.getTextInputValue('bio');
-
-    try {
-        await processBioSetting(userId, interaction.user.tag, bio);
-        
-        const successEmbed = new EmbedBuilder()
-            .setTitle("✅ Paid Helper Bio Set!")
-            .setDescription("Your bio has been set and you are now visible on the paid helper tracker board.")
-            .addFields([
-                { name: '💼 Your Bio', value: bio, inline: false },
-                { name: '⏰ Expires', value: 'In 7 days (must be renewed weekly)', inline: true }
-            ])
-            .setColor(0x00d4aa);
-
-        await interaction.reply({ embeds: [successEmbed], flags: MessageFlags.Ephemeral });
-
-    } catch (error) {
-        console.error('Error setting paid bio:', error);
-        await interaction.reply({ content: "❌ Failed to set bio. Please try again.", flags: MessageFlags.Ephemeral });
-    }
+    // Bio feature disabled
+    await interaction.reply({
+        content: "❌ Bio feature has been disabled. Contact staff to manage paid helpers.",
+        flags: MessageFlags.Ephemeral
+    });
 }
 
 async function updateVouchTicketEmbed(interaction: any, ticketData: VouchTicketData): Promise<void> {

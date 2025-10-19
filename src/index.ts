@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initializeDatabase, closeDatabase } from './database';
 import WeeklyScheduler from './utils/scheduler';
+import DailyScheduler from './utils/dailyScheduler';
 import { botLogger } from './utils/logger';
 
 dotenv.config();
@@ -31,7 +32,8 @@ client.buttons = new Collection();
 client.modals = new Collection();
 client.selectMenus = new Collection();
 
-let scheduler: WeeklyScheduler;
+let weeklyScheduler: WeeklyScheduler;
+let dailyScheduler: DailyScheduler;
 
 async function loadCommands(): Promise<void> {
     client.commands.clear();
@@ -146,12 +148,16 @@ async function initializeBot(): Promise<void> {
         await deployCommands();
         
         await client.login(process.env.BOT_TOKEN);
-        
+
         botLogger.initialize(client);
-        
-        scheduler = new WeeklyScheduler(client);
-        scheduler.start();
-        
+
+        // Initialize schedulers
+        weeklyScheduler = new WeeklyScheduler(client);
+        weeklyScheduler.start();
+
+        dailyScheduler = new DailyScheduler(client);
+        dailyScheduler.start();
+
         console.log('🚀 VouchBot initialization complete!');
         await botLogger.logBotStart();
     } catch (error) {
@@ -163,7 +169,8 @@ async function initializeBot(): Promise<void> {
 process.on('SIGINT', async () => {
     console.log('\n🔄 Received SIGINT, shutting down gracefully...');
     await botLogger.logBotShutdown();
-    if (scheduler) scheduler.stop();
+    if (weeklyScheduler) weeklyScheduler.stop();
+    if (dailyScheduler) dailyScheduler.stop();
     await closeDatabase();
     client.destroy();
     process.exit(0);
@@ -172,7 +179,8 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
     console.log('\n🔄 Received SIGTERM, shutting down gracefully...');
     await botLogger.logBotShutdown();
-    if (scheduler) scheduler.stop();
+    if (weeklyScheduler) weeklyScheduler.stop();
+    if (dailyScheduler) dailyScheduler.stop();
     await closeDatabase();
     client.destroy();
     process.exit(0);

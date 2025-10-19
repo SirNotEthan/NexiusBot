@@ -66,10 +66,11 @@ function parseTicketDataFromInteraction(interaction: ButtonInteraction): VouchTi
             ticketData.selectedHelper = helperMatch[1];
         }
 
-        // Parse ROBLOX username
-        const robloxMatch = fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`([^`]+)\`\`/);
+        // Parse ROBLOX username - updated regex to match the format with triple backticks
+        const robloxMatch = fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`\`([^`]+)\`\`\`/) ||
+                           fullContent.match(/\*\*ROBLOX Username\*\*\\n\`\`([^`]+)\`\`/);
         if (robloxMatch && robloxMatch[1]) {
-            ticketData.robloxUsername = robloxMatch[1];
+            ticketData.robloxUsername = robloxMatch[1].trim();
         }
 
         console.log('[PARSE_DEBUG] Parsed ticket data:', {

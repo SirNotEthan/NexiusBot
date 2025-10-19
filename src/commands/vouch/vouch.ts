@@ -23,55 +23,72 @@ const data = new SlashCommandBuilder()
             .setRequired(true)
     );
 
-async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+/**
+ * Get unvouched tickets for a user with a specific helper
+ */
+export async function getUnvouchedTickets(userId: string, helperId: string): Promise<any[]> {
+    const db = new Database();
+    await db.connect();
+
     try {
-        const helper = interaction.options.getUser('helper', true);
-        const db = new Database();
-        await db.connect();
+        // Check if the user has any recent closed tickets with this helper
+        const recentTicketsQuery = `
+            SELECT * FROM tickets
+            WHERE user_id = ? AND claimed_by = ? AND status = 'closed'
+            AND created_at > ?
+            ORDER BY created_at DESC LIMIT 10
+        `;
+        const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+        const recentTickets = (db as any).db!.prepare(recentTicketsQuery).all([
+            userId,
+            helperId,
+            sevenDaysAgo
+        ]);
 
-        try {
-            // Check if the user has any recent closed tickets with this helper
-            const recentTicketsQuery = `
-                SELECT * FROM tickets
-                WHERE user_id = ? AND claimed_by = ? AND status = 'closed'
-                AND created_at > ?
-                ORDER BY created_at DESC LIMIT 1
-            `;
-            const recentTickets = (db as any).db!.prepare(recentTicketsQuery).all([
-                interaction.user.id,
-                helper.id,
-                Date.now() - (7 * 24 * 60 * 60 * 1000)
-            ]); // 7 days ago
+        if (!recentTickets || recentTickets.length === 0) {
+            return [];
+        }
 
-            if (!recentTickets || recentTickets.length === 0) {
-                await interaction.reply({
-                    content: "❌ **No recent tickets found** with this helper. You can only vouch for helpers who have recently helped you in a ticket within the last 7 days.",
-                    ephemeral: true
-                });
-                return;
-            }
-
-            const ticket = recentTickets[0];
-
-            // Check if already vouched for this ticket
+        // Filter out tickets that have already been vouched for
+        const unvouchedTickets = [];
+        for (const ticket of recentTickets) {
             const existingVouchQuery = `
                 SELECT * FROM vouches
                 WHERE ticket_id = ? AND user_id = ?
             `;
-            const existingVouch = (db as any).db!.prepare(existingVouchQuery).all([ticket.id, interaction.user.id]);
+            const existingVouch = (db as any).db!.prepare(existingVouchQuery).all([ticket.ticket_number, userId]);
 
-            if (existingVouch && existingVouch.length > 0) {
-                await interaction.reply({
-                    content: "❌ **You have already submitted a review** for this helper on your recent ticket.",
-                    ephemeral: true
-                });
-                return;
+            if (!existingVouch || existingVouch.length === 0) {
+                unvouchedTickets.push(ticket);
             }
+        }
 
+        return unvouchedTickets;
+    } finally {
+        await db.close();
+    }
+}
+
+async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    try {
+        const helper = interaction.options.getUser('helper', true);
+        const unvouchedTickets = await getUnvouchedTickets(interaction.user.id, helper.id);
+
+        if (unvouchedTickets.length === 0) {
+            await interaction.reply({
+                content: `❌ **No recent tickets found** with ${helper.tag}.\n\nYou can only vouch for helpers who have recently helped you in a ticket within the last 7 days, and you may have already reviewed all your tickets with this helper.`,
+                ephemeral: true
+            });
+            return;
+        }
+
+        // If multiple unvouched tickets, show selection
+        if (unvouchedTickets.length > 1) {
+            await showTicketSelection(interaction, helper.id, helper.tag, unvouchedTickets);
+        } else {
+            const ticket = unvouchedTickets[0];
+            console.log(`[VOUCH] Found ticket #${ticket.ticket_number} for user ${interaction.user.tag} with helper ${helper.tag}`);
             await showRatingSelection(interaction, helper.id, helper.tag, ticket.ticket_number, ticket.type);
-
-        } finally {
-            await db.close();
         }
 
     } catch (error) {
@@ -80,10 +97,55 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     }
 }
 
-async function showRatingSelection(
-    interaction: ChatInputCommandInteraction, 
-    helperId: string, 
-    helperTag: string, 
+export async function showTicketSelection(
+    interaction: ChatInputCommandInteraction | any,
+    helperId: string,
+    helperTag: string,
+    tickets: any[]
+): Promise<void> {
+    const embed = new EmbedBuilder()
+        .setTitle("🎫 Select a Ticket to Review")
+        .setDescription(`You have multiple tickets with **${helperTag}**. Please select which one you'd like to review:`)
+        .setColor(0x5865f2);
+
+    const ticketOptions = tickets.map(ticket => ({
+        label: `Ticket #${ticket.ticket_number}`,
+        value: `${ticket.ticket_number}`,
+        description: `${ticket.gamemode || 'Unknown'} - ${new Date(ticket.created_at).toLocaleDateString()}`
+    }));
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`vouch_ticket_select_${interaction.user.id}_${helperId}`)
+        .setPlaceholder('Choose a ticket to review...')
+        .addOptions(ticketOptions.map(option =>
+            new StringSelectMenuOptionBuilder()
+                .setLabel(option.label)
+                .setValue(option.value)
+                .setDescription(option.description)
+        ));
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+    const replyOptions = {
+        embeds: [embed],
+        components: [row],
+        ephemeral: true
+    };
+
+    // Handle both ChatInputCommandInteraction and ButtonInteraction
+    if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(replyOptions);
+    } else if ('update' in interaction && typeof interaction.update === 'function') {
+        await interaction.update(replyOptions);
+    } else {
+        await interaction.reply(replyOptions);
+    }
+}
+
+export async function showRatingSelection(
+    interaction: ChatInputCommandInteraction | any,
+    helperId: string,
+    helperTag: string,
     ticketId: number,
     ticketType: 'regular' | 'paid'
 ): Promise<void> {
@@ -103,7 +165,7 @@ async function showRatingSelection(
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId(`vouch_rating_${interaction.user.id}_${helperId}_${ticketId}_${ticketType}`)
         .setPlaceholder('Choose a rating...')
-        .addOptions(ratingOptions.map(option => 
+        .addOptions(ratingOptions.map(option =>
             new StringSelectMenuOptionBuilder()
                 .setLabel(option.label)
                 .setValue(option.value)
@@ -112,11 +174,20 @@ async function showRatingSelection(
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
-    await interaction.reply({
+    const replyOptions = {
         embeds: [embed],
         components: [row],
         ephemeral: true
-    });
+    };
+
+    // Handle both ChatInputCommandInteraction and ButtonInteraction
+    if (interaction.replied || interaction.deferred) {
+        await interaction.editReply(replyOptions);
+    } else if ('update' in interaction && typeof interaction.update === 'function') {
+        await interaction.update(replyOptions);
+    } else {
+        await interaction.reply(replyOptions);
+    }
 }
 
 export function createVouchReasonModal(
@@ -214,9 +285,17 @@ export async function processVouch(
             }
         }
 
-        const ticket = await db.getTicket((await db.getTicketByChannelId(channelId!))?.ticket_number!);
-        if (ticket) {
-            await db.closeTicket(ticket.ticket_number);
+        // Close the ticket if channel ID is provided and get ticket number for logging
+        let ticketNumberForLog = 'Unknown';
+        if (channelId) {
+            const ticket = await db.getTicketByChannelId(channelId);
+            if (ticket) {
+                ticketNumberForLog = ticket.ticket_number;
+                if (ticket.status !== 'closed') {
+                    await db.closeTicket(ticket.ticket_number);
+                    console.log(`[VOUCH] Closed ticket #${ticket.ticket_number} after vouch submission`);
+                }
+            }
         }
 
         if (guildId) {
@@ -229,7 +308,7 @@ export async function processVouch(
                 reason,
                 ticketType,
                 compensation,
-                ticketNumber: ticket?.ticket_number || 'Unknown'
+                ticketNumber: ticketNumberForLog
             });
         }
 

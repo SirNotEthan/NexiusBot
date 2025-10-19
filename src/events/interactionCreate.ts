@@ -6,7 +6,6 @@ import { isInteractionValid } from '../utils/interactionUtils';
 
 import {
     handleTicketButtons,
-    handleVouchTicketButtons,
     handleClaimTicket,
     handleEditTicket,
     handleCloseTicket,
@@ -25,7 +24,7 @@ import {
     handleVouchRatingSelection
 } from '../interactions/selectMenus';
 
-import { VouchTicketData } from '../commands/vouch/request-carry';
+// VouchTicketData import removed - using new modular system
 
 import {
     handleTicketModals,
@@ -193,15 +192,15 @@ async function handleButtonInteraction(interaction: ButtonInteraction): Promise<
         interaction.customId === 'edit_ticket' ||
         interaction.customId === 'close_ticket' ||
         interaction.customId === 'unclaim_ticket' ||
-        interaction.customId === 'ring_helper') {
+        interaction.customId === 'ring_helper' ||
+        interaction.customId.startsWith('authorize_close_') ||
+        interaction.customId.startsWith('deny_close_')) {
         const { InteractionRouter } = await import('../interactions/InteractionRouter');
         await InteractionRouter.routeButtonInteraction(interaction);
         return;
     }
     
-    if (interaction.customId.startsWith('vouch_')) {
-        await handleVouchTicketButtons(interaction);
-    }
+    // Vouch ticket buttons removed - handled by new modular system
     
     if (interaction.customId.startsWith('leaderboard_')) {
         await handleLeaderboardButtons(interaction);
@@ -267,9 +266,7 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
         return;
     }
     
-    if (interaction.customId.startsWith('paid_helper_select_')) {
-        await handlePaidHelperSelection(interaction);
-    }
+    // Paid helper selection removed - handled by new system
     
     // Handle Components V2 game selection menus
     if (interaction.customId.startsWith('carry_request_game_select_') ||
@@ -287,13 +284,9 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
         return;
     }
     
-    if (interaction.customId.startsWith('vouch_gamemode_')) {
-        await handleVouchGamemodeSelection(interaction);
-    }
+    // Vouch gamemode selection removed - handled by new modular system
     
-    if (interaction.customId.startsWith('vouch_rating_')) {
-        await handleVouchRatingSelection(interaction);
-    }
+    // Vouch rating selection removed or handled by new system
 }
 
 async function handleModalInteraction(interaction: ModalSubmitInteraction): Promise<void> {
@@ -318,17 +311,9 @@ async function handleModalInteraction(interaction: ModalSubmitInteraction): Prom
         return;
     }
     
-    if (interaction.customId.startsWith('vouch_goal_modal_')) {
-        await handleVouchGoalModal(interaction);
-    }
+    // Vouch goal modal removed - handled by new modular system
     
-    if (interaction.customId.startsWith('vouch_reason_modal_')) {
-        await handleVouchReasonModal(interaction);
-    }
-    
-    if (interaction.customId.startsWith('paid_bio_modal_')) {
-        await handlePaidBioModal(interaction);
-    }
+    // Vouch reason and paid bio modals removed - handled by new system
     
     if (interaction.customId === 'edit_ticket_modal') {
         await handleEditTicketModal(interaction);
@@ -399,26 +384,11 @@ async function handleEmbedTicketTypeSelection(interaction: StringSelectMenuInter
 
 async function handleEmbedGameSelection(interaction: StringSelectMenuInteraction): Promise<void> {
     try {
-        const customIdParts = interaction.customId.split('_');
-        const ticketType = customIdParts[3] as 'regular' | 'paid';
-        const userId = customIdParts[4];
-        
-        if (interaction.user.id !== userId) {
-            await interaction.reply({ content: "❌ This selection is not for you!", ephemeral: true });
-            return;
-        }
-
-        const game = interaction.values[0];
-        
-        const { showTicketForm } = await import('../commands/vouch/request-carry');
-        
-        const ticketData: VouchTicketData = {
-            type: ticketType,
-            game: game
-        };
-
-        await showTicketForm(interaction, ticketData);
-        
+        await interaction.update({
+            content: "🔄 **This feature is being updated!**\n\nPlease use `/request-carry` command for the new improved experience.",
+            components: [],
+            embeds: []
+        });
     } catch (error) {
         console.error('Error handling embed game selection:', error);
         await interaction.reply({

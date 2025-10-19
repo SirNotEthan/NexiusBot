@@ -60,15 +60,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         const ticketType = interaction.options.getString('type', true) as 'regular' | 'paid';
         const game = interaction.options.getString('game', true);
 
-        // Check if paid help is available
-        if (ticketType === 'paid') {
-            await safeReply(interaction, {
-                content: `🚫 **Paid Help is currently disabled.**\n\nPaid tickets are temporarily unavailable while we work on improvements. Please use **Regular Help** instead or try again later.\n\n*Thank you for your understanding!*`,
-                ephemeral: true
-            });
-            return;
-        }
-
         // Defer reply for processing
         const deferred = await safeDeferReply(interaction, { ephemeral: true });
         if (!deferred) return;

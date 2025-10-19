@@ -621,19 +621,28 @@ async function formatTranscript(ticket: any, messages: Message[], closedBy: any)
 }
 
 async function showHelperAuthorizationPrompt(interaction: ButtonInteraction, ticket: any): Promise<void> {
-    const authorizationEmbed = new EmbedBuilder()
-        .setTitle("🔒 Request Ticket Closure Authorization")
-        .setDescription(`**${interaction.user}** wants to close this ticket.\n\nAs the helper assigned to this ticket, do you authorize closing it?`)
-        .setColor(0xf39c12)
-        .addFields([
-            {
-                name: "📋 **Ticket Summary**",
-                value: `**Ticket:** #${ticket.ticket_number}\n**Helper:** <@${ticket.claimed_by}>\n**Creator:** <@${ticket.user_id}>`,
-                inline: false
-            }
-        ]);
+    const authContainer = new ContainerBuilder();
+    if (!(authContainer as any).components) {
+        (authContainer as any).components = [];
+    }
 
-    const authorizationRow = new ActionRowBuilder<ButtonBuilder>().addComponents([
+    const mentionText = new TextDisplayBuilder()
+        .setContent(`<@${ticket.claimed_by}> - Authorization needed for ticket closure`);
+    (authContainer as any).components.push(mentionText);
+
+    const authHeader = new TextDisplayBuilder()
+        .setContent(`# 🔒 Request Ticket Closure Authorization`);
+    (authContainer as any).components.push(authHeader);
+
+    const authDescription = new TextDisplayBuilder()
+        .setContent(`**${interaction.user}** wants to close this ticket.\n\nAs the helper assigned to this ticket, do you authorize closing it?`);
+    (authContainer as any).components.push(authDescription);
+
+    const authSummary = new TextDisplayBuilder()
+        .setContent(`**📋 Ticket Summary**\n**Ticket:** #${ticket.ticket_number}\n**Helper:** <@${ticket.claimed_by}>\n**Creator:** <@${ticket.user_id}>`);
+    (authContainer as any).components.push(authSummary);
+
+    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents([
         new ButtonBuilder()
             .setCustomId(`authorize_close_${ticket.ticket_number}_${interaction.user.id}`)
             .setLabel('✅ Authorize Closure')
@@ -643,49 +652,102 @@ async function showHelperAuthorizationPrompt(interaction: ButtonInteraction, tic
             .setLabel('❌ Deny Closure')
             .setStyle(ButtonStyle.Danger)
     ]);
+    (authContainer as any).components.push(buttonRow);
 
     await interaction.reply({
-        content: `<@${ticket.claimed_by}> - Authorization needed for ticket closure`,
-        embeds: [authorizationEmbed],
-        components: [authorizationRow],
+        components: [authContainer],
+        flags: MessageFlags.IsComponentsV2,
         ephemeral: false
     });
 }
 
 async function showReviewPrompt(interaction: ButtonInteraction, ticket: any): Promise<void> {
-    const reviewEmbed = new EmbedBuilder()
-        .setTitle("✅ Ticket Closure")
-        .setDescription(`**This ticket is being closed.**\n\nIf you'd like to leave feedback for **${ticket.claimed_by_tag}**, you can use the \`/vouch\` command after the ticket closes.`)
-        .setColor(0x5865f2)
-        .addFields([
-            {
-                name: "📋 **Ticket Summary**",
-                value: `**Ticket:** #${ticket.ticket_number}\n**Helper:** ${ticket.claimed_by_tag}\n**Type:** ${ticket.type === 'paid' ? '💳 Paid Help' : '🆓 Free Help'}`,
-                inline: false
-            },
-            {
-                name: "💡 **How to leave feedback**",
-                value: `After this ticket closes, use \`/vouch @${ticket.claimed_by_tag}\` to rate your experience.`,
-                inline: false
-            }
-        ])
-        .setFooter({
-            text: "Ticket will close automatically in a few seconds",
-            iconURL: interaction.client.user?.displayAvatarURL()
-        })
-        .setTimestamp();
+    try {
+        // Import vouch helper functions
+        const { getUnvouchedTickets, showTicketSelection, showRatingSelection } = await import('../../commands/vouch/vouch');
 
-    await interaction.reply({
-        content: "🔒 **Closing ticket...**",
-        embeds: [reviewEmbed],
-        ephemeral: false
-    });
+        // Defer reply to prevent timeout
+        await interaction.deferReply({ ephemeral: true });
 
-    // Auto-close after showing the message
-    setTimeout(async () => {
-        await generateAndSendTicketTranscript(interaction, ticket);
-        await finalizeTicketClosure(interaction, ticket);
-    }, 3000); // 3 second delay
+        // Check if there are unvouched tickets with this helper
+        const unvouchedTickets = await getUnvouchedTickets(ticket.user_id, ticket.claimed_by);
+
+        if (unvouchedTickets.length === 0) {
+            // No tickets to vouch for, just close the ticket
+            await interaction.editReply({
+                content: `✅ **Ticket #${ticket.ticket_number} is being closed.**\n\nThank you for using our help service!`
+            });
+
+            // Auto-close after showing the message
+            setTimeout(async () => {
+                await generateAndSendTicketTranscript(interaction, ticket);
+                await finalizeTicketClosure(interaction, ticket);
+            }, 2000);
+            return;
+        }
+
+        // Show appropriate review prompt
+        if (unvouchedTickets.length > 1) {
+            // Multiple tickets - show selection
+            await showTicketSelection(
+                interaction,
+                ticket.claimed_by,
+                ticket.claimed_by_tag,
+                unvouchedTickets
+            );
+        } else {
+            // Single ticket - go straight to rating
+            const reviewTicket = unvouchedTickets[0];
+            await showRatingSelection(
+                interaction,
+                ticket.claimed_by,
+                ticket.claimed_by_tag,
+                reviewTicket.ticket_number,
+                reviewTicket.type
+            );
+        }
+
+        // Auto-close ticket after showing review prompt
+        setTimeout(async () => {
+            await generateAndSendTicketTranscript(interaction, ticket);
+            await finalizeTicketClosure(interaction, ticket);
+        }, 30000); // 30 second delay to give time for review
+
+    } catch (error) {
+        console.error('Error showing review prompt:', error);
+
+        // Fallback: show old message and close ticket
+        const closureContainer = new ContainerBuilder();
+        if (!(closureContainer as any).components) {
+            (closureContainer as any).components = [];
+        }
+
+        const closureHeader = new TextDisplayBuilder()
+            .setContent(`# ✅ Ticket Closure`);
+        (closureContainer as any).components.push(closureHeader);
+
+        const closureDescription = new TextDisplayBuilder()
+            .setContent(`**This ticket is being closed.**\n\nIf you'd like to leave feedback for **${ticket.claimed_by_tag}**, you can use the \`/vouch\` command after the ticket closes.`);
+        (closureContainer as any).components.push(closureDescription);
+
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({
+                components: [closureContainer]
+            });
+        } else {
+            await interaction.reply({
+                components: [closureContainer],
+                flags: MessageFlags.IsComponentsV2,
+                ephemeral: false
+            });
+        }
+
+        // Auto-close after showing the message
+        setTimeout(async () => {
+            await generateAndSendTicketTranscript(interaction, ticket);
+            await finalizeTicketClosure(interaction, ticket);
+        }, 3000);
+    }
 }
 
 export async function handleRingHelper(interaction: ButtonInteraction): Promise<void> {
@@ -744,10 +806,29 @@ export async function handleRingHelper(interaction: ButtonInteraction): Promise<
         return;
     }
 
-    const ringMessage = `🔔 **Helper Ring!**\n\n${helperMention} - ${interaction.user} is requesting assistance in this ${getGameDisplayName(ticket.game)} ${ticket.type} carry ticket!\n\n**Ticket:** #${ticket.ticket_number}\n**Gamemode:** ${capitalizeFirstLetter(ticket.gamemode)}\n**Goal:** ${ticket.goal}`;
+    const ringContainer = new ContainerBuilder();
+    if (!(ringContainer as any).components) {
+        (ringContainer as any).components = [];
+    }
+
+    // Create a single, clean text display with all information
+    const pingContent = [
+        `# 🔔 Helper Needed!`,
+        ``,
+        `${helperMention} ${interaction.user} is requesting assistance in this ${getGameDisplayName(ticket.game)} regular carry ticket!`,
+        ``,
+        `**Ticket:** \`#${ticket.ticket_number}\``,
+        `**Gamemode:** \`${capitalizeFirstLetter(ticket.gamemode)}\``,
+        `**Goal:** \`${ticket.goal}\``
+    ].join('\n');
+
+    const ringMessage = new TextDisplayBuilder()
+        .setContent(pingContent);
+    (ringContainer as any).components.push(ringMessage);
 
     await interaction.reply({
-        content: ringMessage,
+        components: [ringContainer],
+        flags: MessageFlags.IsComponentsV2,
         allowedMentions: { roles: [gameHelperRoleId || process.env.HELPER_ROLE_ID || process.env.PAID_HELPER_ROLE_ID].filter(Boolean) }
     });
 }
@@ -1242,125 +1323,203 @@ async function generateTicketTranscriptForChannel(ticketChannel: TextChannel, ti
 }
 
 export async function handleAuthorizeClose(interaction: ButtonInteraction): Promise<void> {
-    const customId = interaction.customId;
-    const parts = customId.split('_');
+    try {
+        console.log(`[AUTHORIZE_CLOSE] Button clicked by ${interaction.user.tag} in channel ${interaction.channelId}`);
 
-    if (parts.length !== 4) {
-        await interaction.reply({
-            content: "❌ Invalid authorization button data.",
-            ephemeral: true
-        });
-        return;
-    }
+        const customId = interaction.customId;
+        // Parse: authorize_close_{ticketNumber}_{userId}
+        const match = customId.match(/^authorize_close_(.+)_(\d+)$/);
 
-    const ticketNumber = parts[2];
-    const requestingUserId = parts[3];
-
-    const db = getDatabase();
-    const ticket = await db.getTicketByChannelId(interaction.channelId);
-
-    if (!ticket) {
-        await interaction.reply({
-            content: "❌ Could not find ticket information in database.",
-            ephemeral: true
-        });
-        return;
-    }
-
-    if (ticket.claimed_by !== interaction.user.id) {
-        await interaction.reply({
-            content: "❌ Only the assigned helper can authorize ticket closure.",
-            ephemeral: true
-        });
-        return;
-    }
-
-    // Edit the original authorization message to show authorization granted
-    const authorizedEmbed = new EmbedBuilder()
-        .setTitle("✅ Authorization Granted")
-        .setDescription(`**${interaction.user}** has authorized the ticket closure.`)
-        .setColor(0x00ff00);
-
-    await interaction.update({
-        content: `Authorization granted. Proceeding to close the ticket...`,
-        embeds: [authorizedEmbed],
-        components: []
-    });
-
-    // Continue with the normal closing process - just close the ticket directly
-    setTimeout(async () => {
-        try {
-            const client = require('../../index').client as any;
-            const channel = await client.channels.fetch(interaction.channelId);
-
-            if (channel) {
-                await generateTicketTranscriptForChannel(channel, ticket, interaction.user.id, interaction.user.tag);
-
-                const db = getDatabase();
-                await db.closeTicket(ticket.ticket_number);
-                await botLogger.logTicketClosed(ticket.ticket_number, 'Ticket completed', ticket.user_id);
-
-                // Send closing message and delete channel
-                await channel.send(`🔒 **This ticket has been closed and transcript saved.**\n⏰ **This channel will be deleted in 10 seconds.**`);
-
-                setTimeout(async () => {
-                    try {
-                        await channel.delete(`Ticket #${ticket.ticket_number} closed and transcript saved`);
-                    } catch (deleteError) {
-                        console.error(`Error deleting ticket channel:`, deleteError);
-                    }
-                }, 10000);
-            }
-        } catch (error) {
-            console.error('Error in authorization close process:', error);
+        if (!match) {
+            console.error(`[AUTHORIZE_CLOSE] Invalid custom ID format: ${customId}`);
+            await interaction.reply({
+                content: "❌ Invalid authorization button data.",
+                ephemeral: true
+            });
+            return;
         }
-    }, 2000); // 2 second delay after authorization
+
+        const ticketNumber = match[1];
+        const requestingUserId = match[2];
+        console.log(`[AUTHORIZE_CLOSE] Parsed ticket #${ticketNumber}, requesting user: ${requestingUserId}`);
+
+        // Defer the update immediately to prevent timeout
+        await interaction.deferUpdate();
+
+        const db = getDatabase();
+        const ticket = await db.getTicketByChannelId(interaction.channelId);
+
+        if (!ticket) {
+            console.error(`[AUTHORIZE_CLOSE] No ticket found for channel ${interaction.channelId}`);
+            await interaction.followUp({
+                content: "❌ Could not find ticket information in database.",
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (ticket.claimed_by !== interaction.user.id) {
+            console.error(`[AUTHORIZE_CLOSE] User ${interaction.user.id} is not the assigned helper (${ticket.claimed_by})`);
+            await interaction.followUp({
+                content: "❌ Only the assigned helper can authorize ticket closure.",
+                ephemeral: true
+            });
+            return;
+        }
+
+        console.log(`[AUTHORIZE_CLOSE] Authorization granted by ${interaction.user.tag}`);
+
+        // Edit the original authorization message to show authorization granted
+        const authorizedContainer = new ContainerBuilder();
+        if (!(authorizedContainer as any).components) {
+            (authorizedContainer as any).components = [];
+        }
+
+        const authorizedHeader = new TextDisplayBuilder()
+            .setContent(`# ✅ Authorization Granted`);
+        (authorizedContainer as any).components.push(authorizedHeader);
+
+        const authorizedDescription = new TextDisplayBuilder()
+            .setContent(`Authorization granted. Proceeding to close the ticket...\n\n**${interaction.user}** has authorized the ticket closure.`);
+        (authorizedContainer as any).components.push(authorizedDescription);
+
+        await interaction.editReply({
+            components: [authorizedContainer],
+            flags: MessageFlags.IsComponentsV2
+        });
+
+        // Continue with the normal closing process - just close the ticket directly
+        setTimeout(async () => {
+            try {
+                console.log(`[AUTHORIZE_CLOSE] Starting ticket closure process for ticket #${ticket.ticket_number}`);
+                const client = require('../../index').client as any;
+                const channel = await client.channels.fetch(interaction.channelId);
+
+                if (channel) {
+                    await generateTicketTranscriptForChannel(channel, ticket, interaction.user.id, interaction.user.tag);
+
+                    const db = getDatabase();
+                    await db.closeTicket(ticket.ticket_number);
+                    await botLogger.logTicketClosed(ticket.ticket_number, 'Ticket completed', ticket.user_id);
+
+                    // Send closing message and delete channel
+                    await channel.send(`🔒 **This ticket has been closed and transcript saved.**\n⏰ **This channel will be deleted in 10 seconds.**`);
+
+                    setTimeout(async () => {
+                        try {
+                            await channel.delete(`Ticket #${ticket.ticket_number} closed and transcript saved`);
+                            console.log(`[AUTHORIZE_CLOSE] Channel deleted for ticket #${ticket.ticket_number}`);
+                        } catch (deleteError) {
+                            console.error(`[AUTHORIZE_CLOSE] Error deleting ticket channel:`, deleteError);
+                        }
+                    }, 10000);
+                }
+            } catch (error) {
+                console.error('[AUTHORIZE_CLOSE] Error in authorization close process:', error);
+            }
+        }, 2000); // 2 second delay after authorization
+    } catch (error) {
+        console.error('[AUTHORIZE_CLOSE] Fatal error in handleAuthorizeClose:', error);
+        try {
+            if (interaction.deferred) {
+                await interaction.followUp({
+                    content: "❌ An error occurred while processing the authorization. Please try again.",
+                    ephemeral: true
+                });
+            } else {
+                await interaction.reply({
+                    content: "❌ An error occurred while processing the authorization. Please try again.",
+                    ephemeral: true
+                });
+            }
+        } catch (followUpError) {
+            console.error('[AUTHORIZE_CLOSE] Could not send error message:', followUpError);
+        }
+    }
 }
 
 export async function handleDenyClose(interaction: ButtonInteraction): Promise<void> {
-    const customId = interaction.customId;
-    const parts = customId.split('_');
+    try {
+        console.log(`[DENY_CLOSE] Button clicked by ${interaction.user.tag} in channel ${interaction.channelId}`);
 
-    if (parts.length !== 4) {
-        await interaction.reply({
-            content: "❌ Invalid deny button data.",
-            ephemeral: true
+        const customId = interaction.customId;
+        // Parse: deny_close_{ticketNumber}_{userId}
+        const match = customId.match(/^deny_close_(.+)_(\d+)$/);
+
+        if (!match) {
+            console.error(`[DENY_CLOSE] Invalid custom ID format: ${customId}`);
+            await interaction.reply({
+                content: "❌ Invalid deny button data.",
+                ephemeral: true
+            });
+            return;
+        }
+
+        const ticketNumber = match[1];
+        const requestingUserId = match[2];
+        console.log(`[DENY_CLOSE] Parsed ticket #${ticketNumber}, requesting user: ${requestingUserId}`);
+
+        // Defer the update immediately to prevent timeout
+        await interaction.deferUpdate();
+
+        const db = getDatabase();
+        const ticket = await db.getTicketByChannelId(interaction.channelId);
+
+        if (!ticket) {
+            console.error(`[DENY_CLOSE] No ticket found for channel ${interaction.channelId}`);
+            await interaction.followUp({
+                content: "❌ Could not find ticket information in database.",
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (ticket.claimed_by !== interaction.user.id) {
+            console.error(`[DENY_CLOSE] User ${interaction.user.id} is not the assigned helper (${ticket.claimed_by})`);
+            await interaction.followUp({
+                content: "❌ Only the assigned helper can deny ticket closure.",
+                ephemeral: true
+            });
+            return;
+        }
+
+        console.log(`[DENY_CLOSE] Closure request denied by ${interaction.user.tag}`);
+
+        // Edit the original authorization message to show "Request Denied"
+        const deniedContainer = new ContainerBuilder();
+        if (!(deniedContainer as any).components) {
+            (deniedContainer as any).components = [];
+        }
+
+        const deniedHeader = new TextDisplayBuilder()
+            .setContent(`# ❌ Request Denied`);
+        (deniedContainer as any).components.push(deniedHeader);
+
+        const deniedDescription = new TextDisplayBuilder()
+            .setContent(`<@${requestingUserId}> - Your request to close the ticket has been denied.\n\n**${interaction.user}** has denied the ticket closure request.`);
+        (deniedContainer as any).components.push(deniedDescription);
+
+        await interaction.editReply({
+            components: [deniedContainer],
+            flags: MessageFlags.IsComponentsV2
         });
-        return;
+    } catch (error) {
+        console.error('[DENY_CLOSE] Fatal error in handleDenyClose:', error);
+        try {
+            if (interaction.deferred) {
+                await interaction.followUp({
+                    content: "❌ An error occurred while processing the denial. Please try again.",
+                    ephemeral: true
+                });
+            } else {
+                await interaction.reply({
+                    content: "❌ An error occurred while processing the denial. Please try again.",
+                    ephemeral: true
+                });
+            }
+        } catch (followUpError) {
+            console.error('[DENY_CLOSE] Could not send error message:', followUpError);
+        }
     }
-
-    const ticketNumber = parts[2];
-    const requestingUserId = parts[3];
-
-    const db = getDatabase();
-    const ticket = await db.getTicketByChannelId(interaction.channelId);
-
-    if (!ticket) {
-        await interaction.reply({
-            content: "❌ Could not find ticket information in database.",
-            ephemeral: true
-        });
-        return;
-    }
-
-    if (ticket.claimed_by !== interaction.user.id) {
-        await interaction.reply({
-            content: "❌ Only the assigned helper can deny ticket closure.",
-            ephemeral: true
-        });
-        return;
-    }
-
-    // Edit the original authorization message to show "Request Denied"
-    const deniedEmbed = new EmbedBuilder()
-        .setTitle("❌ Request Denied")
-        .setDescription(`**${interaction.user}** has denied the ticket closure request.`)
-        .setColor(0xff0000);
-
-    await interaction.update({
-        content: `<@${requestingUserId}> - Your request to close the ticket has been denied.`,
-        embeds: [deniedEmbed],
-        components: []
-    });
 }
 
