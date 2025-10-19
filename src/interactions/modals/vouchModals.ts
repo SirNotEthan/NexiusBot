@@ -1,4 +1,4 @@
-import { ModalSubmitInteraction, EmbedBuilder, ChannelType, MessageFlags } from 'discord.js';
+import { ModalSubmitInteraction, EmbedBuilder, ChannelType, MessageFlags, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder } from 'discord.js';
 import { VouchTicketData } from '../../commands/vouch/request-carry';
 import { processVouch } from '../../commands/vouch/vouch';
 // import { processBioSetting } from '../../commands/vouch/tracker'; // Removed - bio feature disabled
@@ -127,7 +127,9 @@ export async function handleVouchReasonModal(interaction: ModalSubmitInteraction
     }
 
     const reason = interaction.fields.getTextInputValue('reason');
-    const compensation = interaction.fields.getTextInputValue('compensation') || undefined;
+    const compensation = ticketType === 'paid'
+        ? interaction.fields.getTextInputValue('compensation') || undefined
+        : undefined;
 
     try {
         const guild = interaction.guild;
@@ -138,6 +140,13 @@ export async function handleVouchReasonModal(interaction: ModalSubmitInteraction
 
         const helper = await guild.members.fetch(helperId);
         
+        // Get ticket information before processing
+        const db = new (await import('../../database/database')).default();
+        await db.connect();
+        const ticket = await db.getTicketByChannelId(interaction.channelId);
+        const ticketName = ticket ? `#${ticket.ticket_number}` : 'Unknown';
+        await db.close();
+
         await processVouch(
             userId,
             interaction.user.tag,
@@ -155,13 +164,16 @@ export async function handleVouchReasonModal(interaction: ModalSubmitInteraction
         const stars = '⭐'.repeat(rating);
         const successEmbed = new EmbedBuilder()
             .setTitle("✅ Vouch Submitted Successfully!")
-            .setDescription(`Thank you for vouching for **${helper.user.tag}**!`)
+            .setDescription(`Your vouch has been logged and submitted to the vouches channel.`)
             .addFields([
+                { name: '🎫 Ticket', value: ticketName, inline: true },
+                { name: '👤 Helper Vouched', value: `<@${helperId}> (${helper.user.tag})`, inline: true },
+                { name: '👥 Vouched By', value: `<@${userId}> (${interaction.user.tag})`, inline: true },
                 { name: '⭐ Rating', value: `${stars} (${rating}/5)`, inline: true },
-                { name: '📝 Reason', value: reason, inline: false }
+                { name: '📝 Additional Feedback', value: reason, inline: false }
             ])
             .setColor(0x00ff00)
-            .setFooter({ text: "This ticket will be closed in 10 seconds" });
+            .setTimestamp();
 
         if (compensation) {
             successEmbed.addFields([
@@ -171,16 +183,57 @@ export async function handleVouchReasonModal(interaction: ModalSubmitInteraction
 
         await interaction.reply({ embeds: [successEmbed] });
 
-        setTimeout(async () => {
-            try {
-                const channel = interaction.channel;
-                if (channel && channel.type === ChannelType.GuildText) {
-                    await channel.delete('Ticket auto-closed after vouch submission');
+        // Update the rating selection message to either show remaining tickets or a completion message
+        try {
+            const { getUnvouchedTickets } = await import('../../commands/vouch/vouch');
+            const unvouchedTickets = await getUnvouchedTickets(userId, helperId);
+
+            // interaction.message is the rating selection message
+            if (interaction.message) {
+                // If there are still unvouched tickets, show the ticket selection menu again
+                if (unvouchedTickets.length > 0) {
+                    const helper = await guild.members.fetch(helperId);
+                    const embed = new EmbedBuilder()
+                        .setTitle("🎫 Select a Ticket to Review")
+                        .setDescription(`You have ${unvouchedTickets.length} more ticket${unvouchedTickets.length > 1 ? 's' : ''} with **${helper.user.tag}**. Would you like to review another?`)
+                        .setColor(0x5865f2);
+
+                    const ticketOptions = unvouchedTickets.map(ticket => ({
+                        label: `Ticket #${ticket.ticket_number}`,
+                        value: `${ticket.ticket_number}`,
+                        description: `${ticket.gamemode || 'Unknown'} - ${new Date(ticket.created_at).toLocaleDateString()}`
+                    }));
+
+                    const selectMenu = new StringSelectMenuBuilder()
+                        .setCustomId(`vouch_ticket_select_${userId}_${helperId}`)
+                        .setPlaceholder('Choose a ticket to review...')
+                        .addOptions(ticketOptions.map(option =>
+                            new StringSelectMenuOptionBuilder()
+                                .setLabel(option.label)
+                                .setValue(option.value)
+                                .setDescription(option.description)
+                        ));
+
+                    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+                    // Edit the rating selection message to show the updated ticket list
+                    await interaction.message.edit({
+                        embeds: [embed],
+                        components: [row]
+                    });
+                } else {
+                    // No more unvouched tickets, show completion message
+                    await interaction.message.edit({
+                        content: '✅ All tickets with this helper have been vouched for!',
+                        embeds: [],
+                        components: []
+                    });
                 }
-            } catch (error) {
-                console.error('Error auto-closing ticket:', error);
             }
-        }, 10000);
+        } catch (updateError) {
+            console.error('Error updating select menu after vouch:', updateError);
+            // Don't fail the whole operation if menu update fails
+        }
 
     } catch (error) {
         console.error('Error processing vouch:', error);

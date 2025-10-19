@@ -31,10 +31,10 @@ export async function getUnvouchedTickets(userId: string, helperId: string): Pro
     await db.connect();
 
     try {
-        // Check if the user has any recent closed tickets with this helper
+        // Check if the user has any recent tickets (open, claimed, or closed) with this helper
         const recentTicketsQuery = `
             SELECT * FROM tickets
-            WHERE user_id = ? AND claimed_by = ? AND status = 'closed'
+            WHERE user_id = ? AND claimed_by = ? AND status IN ('open', 'claimed', 'closed')
             AND created_at > ?
             ORDER BY created_at DESC LIMIT 10
         `;
@@ -56,7 +56,8 @@ export async function getUnvouchedTickets(userId: string, helperId: string): Pro
                 SELECT * FROM vouches
                 WHERE ticket_id = ? AND user_id = ?
             `;
-            const existingVouch = (db as any).db!.prepare(existingVouchQuery).all([ticket.ticket_number, userId]);
+            // Note: ticket_id in vouches table is the internal ticket.id, not ticket_number
+            const existingVouch = (db as any).db!.prepare(existingVouchQuery).all([ticket.id, userId]);
 
             if (!existingVouch || existingVouch.length === 0) {
                 unvouchedTickets.push(ticket);
@@ -87,8 +88,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
             await showTicketSelection(interaction, helper.id, helper.tag, unvouchedTickets);
         } else {
             const ticket = unvouchedTickets[0];
-            console.log(`[VOUCH] Found ticket #${ticket.ticket_number} for user ${interaction.user.tag} with helper ${helper.tag}`);
-            await showRatingSelection(interaction, helper.id, helper.tag, ticket.ticket_number, ticket.type);
+            console.log(`[VOUCH] Found ticket #${ticket.ticket_number} (ID: ${ticket.id}) for user ${interaction.user.tag} with helper ${helper.tag}`);
+            await showRatingSelection(interaction, helper.id, helper.tag, ticket.id, ticket.type);
         }
 
     } catch (error) {
@@ -235,8 +236,8 @@ export function createVouchReasonModal(
 
 export async function processVouch(
     userId: string,
-    userTag: string, 
-    helperId: string, 
+    userTag: string,
+    helperId: string,
     helperTag: string,
     rating: number,
     reason: string,
@@ -248,8 +249,27 @@ export async function processVouch(
 ): Promise<void> {
     const db = new Database();
     await db.connect();
-    
+
     try {
+        // Ensure helper exists in the database before creating vouch (foreign key constraint)
+        let helper = await db.getHelper(helperId);
+        if (!helper) {
+            console.log(`[VOUCH] Helper ${helperId} (${helperTag}) not found in database, creating new helper record...`);
+            await db.createHelper({
+                user_id: helperId,
+                user_tag: helperTag,
+                helper_rank: 'Helper',
+                total_vouches: 0,
+                helper_since: Date.now(),
+                weekly_vouches: 0,
+                monthly_vouches: 0,
+                average_rating: 0.0,
+                is_paid_helper: false,
+                vouches_for_paid_access: 0
+            });
+            helper = await db.getHelper(helperId);
+        }
+
         await db.createVouch({
             ticket_id: ticketId,
             helper_id: helperId,
@@ -262,7 +282,6 @@ export async function processVouch(
             compensation: compensation
         });
 
-        const helper = await db.getHelper(helperId);
         if (helper) {
             const newTotalVouches = helper.total_vouches + 1;
             const newWeeklyVouches = helper.weekly_vouches + 1;

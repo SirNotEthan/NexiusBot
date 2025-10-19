@@ -426,11 +426,6 @@ export async function handleCloseTicket(interaction: ButtonInteraction): Promise
         return;
     }
 
-    if (ticket.claimed_by) {
-        await showReviewPrompt(interaction, ticket);
-        return; // Don't close the ticket yet, wait for review
-    }
-
     await generateAndSendTicketTranscript(interaction, ticket);
     await finalizeTicketClosure(interaction, ticket);
 }
@@ -659,95 +654,6 @@ async function showHelperAuthorizationPrompt(interaction: ButtonInteraction, tic
         flags: MessageFlags.IsComponentsV2,
         ephemeral: false
     });
-}
-
-async function showReviewPrompt(interaction: ButtonInteraction, ticket: any): Promise<void> {
-    try {
-        // Import vouch helper functions
-        const { getUnvouchedTickets, showTicketSelection, showRatingSelection } = await import('../../commands/vouch/vouch');
-
-        // Defer reply to prevent timeout
-        await interaction.deferReply({ ephemeral: true });
-
-        // Check if there are unvouched tickets with this helper
-        const unvouchedTickets = await getUnvouchedTickets(ticket.user_id, ticket.claimed_by);
-
-        if (unvouchedTickets.length === 0) {
-            // No tickets to vouch for, just close the ticket
-            await interaction.editReply({
-                content: `✅ **Ticket #${ticket.ticket_number} is being closed.**\n\nThank you for using our help service!`
-            });
-
-            // Auto-close after showing the message
-            setTimeout(async () => {
-                await generateAndSendTicketTranscript(interaction, ticket);
-                await finalizeTicketClosure(interaction, ticket);
-            }, 2000);
-            return;
-        }
-
-        // Show appropriate review prompt
-        if (unvouchedTickets.length > 1) {
-            // Multiple tickets - show selection
-            await showTicketSelection(
-                interaction,
-                ticket.claimed_by,
-                ticket.claimed_by_tag,
-                unvouchedTickets
-            );
-        } else {
-            // Single ticket - go straight to rating
-            const reviewTicket = unvouchedTickets[0];
-            await showRatingSelection(
-                interaction,
-                ticket.claimed_by,
-                ticket.claimed_by_tag,
-                reviewTicket.ticket_number,
-                reviewTicket.type
-            );
-        }
-
-        // Auto-close ticket after showing review prompt
-        setTimeout(async () => {
-            await generateAndSendTicketTranscript(interaction, ticket);
-            await finalizeTicketClosure(interaction, ticket);
-        }, 30000); // 30 second delay to give time for review
-
-    } catch (error) {
-        console.error('Error showing review prompt:', error);
-
-        // Fallback: show old message and close ticket
-        const closureContainer = new ContainerBuilder();
-        if (!(closureContainer as any).components) {
-            (closureContainer as any).components = [];
-        }
-
-        const closureHeader = new TextDisplayBuilder()
-            .setContent(`# ✅ Ticket Closure`);
-        (closureContainer as any).components.push(closureHeader);
-
-        const closureDescription = new TextDisplayBuilder()
-            .setContent(`**This ticket is being closed.**\n\nIf you'd like to leave feedback for **${ticket.claimed_by_tag}**, you can use the \`/vouch\` command after the ticket closes.`);
-        (closureContainer as any).components.push(closureDescription);
-
-        if (interaction.deferred || interaction.replied) {
-            await interaction.editReply({
-                components: [closureContainer]
-            });
-        } else {
-            await interaction.reply({
-                components: [closureContainer],
-                flags: MessageFlags.IsComponentsV2,
-                ephemeral: false
-            });
-        }
-
-        // Auto-close after showing the message
-        setTimeout(async () => {
-            await generateAndSendTicketTranscript(interaction, ticket);
-            await finalizeTicketClosure(interaction, ticket);
-        }, 3000);
-    }
 }
 
 export async function handleRingHelper(interaction: ButtonInteraction): Promise<void> {

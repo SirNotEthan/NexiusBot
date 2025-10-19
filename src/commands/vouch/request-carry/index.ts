@@ -9,11 +9,6 @@ import { RequestCarryUtils } from './utils/RequestCarryUtils';
 import { cooldownManager } from '../../../utils/cooldownManager';
 import { isInteractionValid, safeReply, safeDeferReply } from '../../../utils/interactionUtils';
 
-/**
- * Modern request-carry command implementation
- * Uses Components V2 with improved UX and modular structure
- */
-
 const data = new SlashCommandBuilder()
     .setName("request-carry")
     .setDescription("Request a carry for help with modern Components V2 interface")

@@ -278,34 +278,36 @@ export class InteractionRouter {
                 await this.handleEmbedTicketTypeSelection(interaction);
                 return;
             }
-            
+
             if (customId.startsWith('embed_game_select_')) {
                 await this.handleEmbedGameSelection(interaction);
                 return;
             }
-            
+
             if (customId === 'service_info_game_select') {
                 await this.handleServiceInfoGameSelection(interaction);
                 return;
             }
-            
+
             // Vouch-related selections
             if (customId.startsWith('paid_helper_select_')) {
                 await handlePaidHelperSelection(interaction);
                 return;
             }
-            
+
             if (customId.startsWith('vouch_gamemode_')) {
                 await handleVouchGamemodeSelection(interaction);
                 return;
             }
-            
+
             if (customId.startsWith('vouch_rating_')) {
+                console.log(`[ROUTER] Routing ${customId} to vouch rating selection handler`);
                 await handleVouchRatingSelection(interaction);
                 return;
             }
 
             if (customId.startsWith('vouch_ticket_select_')) {
+                console.log(`[ROUTER] Routing ${customId} to vouch ticket selection handler`);
                 await handleVouchTicketSelection(interaction);
                 return;
             }
@@ -328,34 +330,37 @@ export class InteractionRouter {
                 await handleTicketModals(interaction);
                 return;
             }
-            
+
             // Vouch modals
             if (customId.startsWith('vouch_goal_modal_')) {
+                console.log(`[ROUTER] Routing ${customId} to vouch goal modal handler`);
                 await handleVouchGoalModal(interaction);
                 return;
             }
-            
+
             if (customId.startsWith('vouch_reason_modal_')) {
+                console.log(`[ROUTER] Routing ${customId} to vouch reason modal handler`);
                 await handleVouchReasonModal(interaction);
                 return;
             }
-            
+
             if (customId.startsWith('paid_bio_modal_')) {
+                console.log(`[ROUTER] Routing ${customId} to paid bio modal handler`);
                 await handlePaidBioModal(interaction);
                 return;
             }
-            
+
             if (customId === 'edit_ticket_modal') {
                 await handleEditTicketModal(interaction);
                 return;
             }
-            
+
             // Review modals
             if (customId.startsWith('review_modal_') || customId.startsWith('close_review_modal_')) {
                 await handleReviewModal(interaction);
                 return;
             }
-            
+
             // Middleman modals
             if (customId.includes('middleman_')) {
                 await handleMiddlemanModals(interaction);

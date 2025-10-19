@@ -45,7 +45,7 @@ export interface HelperRecord {
 
 export interface VouchRecord {
     id: number;
-    ticket_id: number;
+    ticket_id: number | null;
     helper_id: string;
     helper_tag: string;
     user_id: string;
@@ -226,7 +226,7 @@ class DatabaseManager extends EventEmitter {
             )`,
             `CREATE TABLE IF NOT EXISTS vouches (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ticket_id INTEGER NOT NULL,
+                ticket_id INTEGER,
                 helper_id TEXT NOT NULL,
                 helper_tag TEXT NOT NULL,
                 user_id TEXT NOT NULL,
@@ -236,7 +236,6 @@ class DatabaseManager extends EventEmitter {
                 type TEXT NOT NULL DEFAULT 'regular',
                 compensation TEXT,
                 created_at INTEGER NOT NULL,
-                FOREIGN KEY (ticket_id) REFERENCES tickets(id),
                 FOREIGN KEY (helper_id) REFERENCES helpers(user_id)
             )`,
             `CREATE TABLE IF NOT EXISTS paid_helpers (
@@ -350,6 +349,7 @@ class DatabaseManager extends EventEmitter {
         this.createIndexes();
         await this.migrateToServerSupportTickets();
         await this.migratePaidHelperVouches();
+        await this.migrateVouchesTableConstraints();
     }
 
     private createIndexes(): void {
@@ -471,6 +471,63 @@ class DatabaseManager extends EventEmitter {
             }
         } catch (error) {
             console.error('Paid helper vouches migration failed:', error);
+        }
+    }
+
+    private async migrateVouchesTableConstraints(): Promise<void> {
+        try {
+            // Check if the vouches table has the old foreign key constraint on ticket_id
+            const tableInfo = this.db!.pragma('table_info(vouches)') as Array<any>;
+            const foreignKeys = this.db!.pragma('foreign_key_list(vouches)') as Array<any>;
+
+            // Check if ticket_id has a foreign key constraint to tickets
+            const hasTicketForeignKey = foreignKeys.some((fk: any) =>
+                fk.from === 'ticket_id' && fk.table === 'tickets'
+            );
+
+            if (hasTicketForeignKey) {
+                console.log('🔄 Migrating vouches table to remove ticket_id foreign key constraint...');
+
+                this.db!.transaction(() => {
+                    // Create new table with updated schema
+                    this.db!.exec(`
+                        CREATE TABLE vouches_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            ticket_id INTEGER,
+                            helper_id TEXT NOT NULL,
+                            helper_tag TEXT NOT NULL,
+                            user_id TEXT NOT NULL,
+                            user_tag TEXT NOT NULL,
+                            rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+                            reason TEXT NOT NULL,
+                            type TEXT NOT NULL DEFAULT 'regular',
+                            compensation TEXT,
+                            created_at INTEGER NOT NULL,
+                            FOREIGN KEY (helper_id) REFERENCES helpers(user_id)
+                        )
+                    `);
+
+                    // Copy data from old table to new table
+                    this.db!.exec(`
+                        INSERT INTO vouches_new
+                        SELECT * FROM vouches
+                    `);
+
+                    // Drop old table
+                    this.db!.exec('DROP TABLE vouches');
+
+                    // Rename new table to original name
+                    this.db!.exec('ALTER TABLE vouches_new RENAME TO vouches');
+
+                    // Recreate indexes
+                    this.db!.exec('CREATE INDEX IF NOT EXISTS idx_vouches_helper_id ON vouches(helper_id)');
+                    this.db!.exec('CREATE INDEX IF NOT EXISTS idx_vouches_user_id ON vouches(user_id)');
+                })();
+
+                console.log('✅ Migration: Vouches table updated - ticket_id is now nullable and foreign key removed');
+            }
+        } catch (error) {
+            console.error('Vouches table migration failed:', error);
         }
     }
 
@@ -939,6 +996,67 @@ class DatabaseManager extends EventEmitter {
             return this.db!.prepare(query).all([helperId, since]) as VouchRecord[];
         } catch (error) {
             console.error('Error getting helper vouches by timeframe:', error);
+            throw error;
+        }
+    }
+
+    async getVouchById(vouchId: number): Promise<VouchRecord | null> {
+        const query = 'SELECT * FROM vouches WHERE id = ?';
+
+        try {
+            const result = this.db!.prepare(query).get([vouchId]) as VouchRecord | undefined;
+            return result || null;
+        } catch (error) {
+            console.error('Error getting vouch by ID:', error);
+            throw error;
+        }
+    }
+
+    async getVouchesByUser(userId: string, limit?: number): Promise<VouchRecord[]> {
+        let query = 'SELECT * FROM vouches WHERE user_id = ? ORDER BY created_at DESC';
+        const params: any[] = [userId];
+
+        if (limit) {
+            query += ' LIMIT ?';
+            params.push(limit);
+        }
+
+        try {
+            return this.db!.prepare(query).all(params) as VouchRecord[];
+        } catch (error) {
+            console.error('Error getting vouches by user:', error);
+            throw error;
+        }
+    }
+
+    async deleteVouch(vouchId: number): Promise<void> {
+        const query = 'DELETE FROM vouches WHERE id = ?';
+
+        try {
+            const result = this.db!.prepare(query).run([vouchId]);
+            if (result.changes === 0) {
+                throw new Error(`No vouch found with ID ${vouchId}`);
+            }
+            console.log(`✅ Deleted vouch with ID ${vouchId}`);
+        } catch (error) {
+            console.error('Error deleting vouch:', error);
+            throw error;
+        }
+    }
+
+    async decrementPaidHelperVouches(helperId: string): Promise<void> {
+        const query = `
+            UPDATE helpers
+            SET vouches_for_paid_access = MAX(0, vouches_for_paid_access - 1),
+                updated_at = ?
+            WHERE user_id = ?
+        `;
+
+        try {
+            this.db!.prepare(query).run([Date.now(), helperId]);
+            console.log(`✅ Decremented paid helper vouches for ${helperId}`);
+        } catch (error) {
+            console.error('Error decrementing paid helper vouches:', error);
             throw error;
         }
     }

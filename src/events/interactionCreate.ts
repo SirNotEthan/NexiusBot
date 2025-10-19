@@ -283,10 +283,16 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
         await InteractionRouter.routeSelectMenuInteraction(interaction);
         return;
     }
-    
-    // Vouch gamemode selection removed - handled by new modular system
-    
-    // Vouch rating selection removed or handled by new system
+
+    // Handle vouch-related select menus (ticket selection, rating selection, etc.)
+    if (interaction.customId.startsWith('vouch_ticket_select_') ||
+        interaction.customId.startsWith('vouch_rating_') ||
+        interaction.customId.startsWith('vouch_gamemode_') ||
+        interaction.customId.startsWith('paid_helper_select_')) {
+        const { InteractionRouter } = await import('../interactions/InteractionRouter');
+        await InteractionRouter.routeSelectMenuInteraction(interaction);
+        return;
+    }
 }
 
 async function handleModalInteraction(interaction: ModalSubmitInteraction): Promise<void> {
@@ -310,10 +316,15 @@ async function handleModalInteraction(interaction: ModalSubmitInteraction): Prom
         await InteractionRouter.routeModalInteraction(interaction);
         return;
     }
-    
-    // Vouch goal modal removed - handled by new modular system
-    
-    // Vouch reason and paid bio modals removed - handled by new system
+
+    // Handle vouch-related modals
+    if (interaction.customId.startsWith('vouch_goal_modal_') ||
+        interaction.customId.startsWith('vouch_reason_modal_') ||
+        interaction.customId.startsWith('paid_bio_modal_')) {
+        const { InteractionRouter } = await import('../interactions/InteractionRouter');
+        await InteractionRouter.routeModalInteraction(interaction);
+        return;
+    }
     
     if (interaction.customId === 'edit_ticket_modal') {
         await handleEditTicketModal(interaction);

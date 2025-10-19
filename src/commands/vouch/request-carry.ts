@@ -563,21 +563,6 @@ export async function createVouchTicket(
             flags: MessageFlags.IsComponentsV2
         });
 
-        // Send authorization container as a separate message
-        const authContainer = new ContainerBuilder();
-        if (!(authContainer as any).components) {
-            (authContainer as any).components = [];
-        }
-
-        const authSection = new TextDisplayBuilder()
-            .setContent(`<@${userId}> - Authorization needed for ticket closure`);
-        (authContainer as any).components.push(authSection);
-
-        await ticketChannel.send({
-            components: [authContainer],
-            flags: MessageFlags.IsComponentsV2
-        });
-
         if (ticketData.type === 'paid' && ticketData.selectedHelper) {
             await ticketChannel.send(`<@${ticketData.selectedHelper}> - You have been selected for this paid help request! This ticket has been automatically assigned to you.`);
         } else {

@@ -151,7 +151,9 @@ export async function handleVouchTicketSelection(interaction: StringSelectMenuIn
     // Discord requires a response within 3 seconds
     await interaction.deferUpdate();
 
-    const ticketNumber = parseInt(interaction.values[0]);
+    // Get the ticket number directly as a string (don't parse as integer)
+    // Ticket numbers can be in formats like "ALS-14", "AV-23", or just "14"
+    const ticketNumber = interaction.values[0];
 
     try {
         const Database = (await import('../../database/database')).default;
@@ -159,7 +161,7 @@ export async function handleVouchTicketSelection(interaction: StringSelectMenuIn
         await db.connect();
 
         try {
-            const ticket = await db.getTicket(ticketNumber.toString());
+            const ticket = await db.getTicket(ticketNumber);
             if (!ticket) {
                 await interaction.followUp({
                     content: "❌ **Ticket not found.**",
@@ -185,7 +187,7 @@ export async function handleVouchTicketSelection(interaction: StringSelectMenuIn
             ];
 
             const selectMenu = new StringSelectMenuBuilder()
-                .setCustomId(`vouch_rating_${userId}_${helperId}_${ticketNumber}_${ticket.type}`)
+                .setCustomId(`vouch_rating_${userId}_${helperId}_${ticket.id}_${ticket.type}`)
                 .setPlaceholder('Choose a rating...')
                 .addOptions(ratingOptions.map(option =>
                     new StringSelectMenuOptionBuilder()
@@ -217,7 +219,7 @@ export async function handleVouchRatingSelection(interaction: StringSelectMenuIn
     const parts = interaction.customId.split('_');
     const userId = parts[2];
     const helperId = parts[3];
-    const ticketIdString = parts[4]; // e.g., "ALS-14" or just "14"
+    const ticketIdString = parts[4]; // This is now the internal ticket ID (integer)
     const ticketType = parts[5] as 'regular' | 'paid';
 
     console.log('[VOUCH_RATING_DEBUG] CustomId:', interaction.customId);
@@ -232,16 +234,8 @@ export async function handleVouchRatingSelection(interaction: StringSelectMenuIn
         return;
     }
 
-    // Parse ticket ID - handle both numeric IDs and game-prefixed IDs
-    let ticketId: number;
-    if (ticketIdString.includes('-')) {
-        // Format: "ALS-14" or "AV-23"
-        const ticketNumber = ticketIdString.split('-')[1];
-        ticketId = parseInt(ticketNumber);
-    } else {
-        // Format: "14" (just a number)
-        ticketId = parseInt(ticketIdString);
-    }
+    // Parse ticket ID - this should now be a simple integer (the internal ticket.id)
+    const ticketId = parseInt(ticketIdString);
 
     console.log('[VOUCH_RATING_DEBUG] Final ticketId:', ticketId);
 
