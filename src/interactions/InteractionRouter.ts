@@ -395,6 +395,7 @@ export class InteractionRouter {
             const { cooldownManager } = await import('../utils/cooldownManager.js');
             const { isInteractionValid } = await import('../utils/interactionUtils.js');
             const { StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ActionRowBuilder } = await import('discord.js');
+            const Database = (await import('../database/database.js')).default;
 
             // Check if interaction is valid
             if (!isInteractionValid(interaction)) {
@@ -414,6 +415,24 @@ export class InteractionRouter {
                     content: `⏰ **Please wait ${timeString}** before creating another carry request.\n\n*This prevents request spam and helps us manage the queue efficiently.*`
                 });
                 return;
+            }
+
+            // Check message requirement (50 messages)
+            const db = new Database();
+            await db.connect();
+
+            try {
+                const messageStats = await db.getUserMessageStats(interaction.user.id);
+                const messageCount = messageStats?.message_count || 0;
+
+                if (messageCount < 50) {
+                    await interaction.editReply({
+                        content: `❌ **Message Requirement Not Met**\n\nYou currently have **${messageCount}** messages today. You need at least **50 messages** to request a free carry.\n\n*Send more messages in the server and try again!*`
+                    });
+                    return;
+                }
+            } finally {
+                await db.close();
             }
 
             // Create game selection menu

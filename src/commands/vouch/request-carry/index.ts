@@ -70,19 +70,12 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
         // Check initial eligibility for regular carries
         if (ticketType === 'regular') {
-            // We'll show a warning if they might not be eligible, but let them continue
-            // The final check will be done at submission
+            // Check message requirement immediately and block if not met
             const messageStats = await checkUserMessages(interaction.user.id);
             if (messageStats < 50) {
-                // Show warning but allow to continue
                 await interaction.editReply({
-                    content: `⚠️ **Message Activity Warning**\n\nYou currently have ${messageStats} messages today. You need at least 50 messages to be eligible for free carries.\n\nYou can continue filling out the form, but you'll need to send more messages before submitting.`
+                    content: `❌ **Message Requirement Not Met**\n\nYou currently have **${messageStats}** messages today. You need at least **50 messages** to request a free carry.\n\n*Send more messages in the server and try again!*`
                 });
-                
-                // Wait a moment for user to read the warning
-                setTimeout(async () => {
-                    await showRequestForm(interaction, requestData);
-                }, 3000);
                 return;
             }
         }
