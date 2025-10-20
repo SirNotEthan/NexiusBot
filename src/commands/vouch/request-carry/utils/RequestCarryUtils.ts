@@ -41,13 +41,15 @@ export class RequestCarryUtils {
                 {
                     id: guild.roles.everyone.id,
                     deny: [PermissionFlagsBits.ViewChannel],
+                    allow: [PermissionFlagsBits.UseApplicationCommands],
                 },
                 {
                     id: userId,
                     allow: [
                         PermissionFlagsBits.ViewChannel,
                         PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.ReadMessageHistory
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.UseApplicationCommands
                     ],
                 }
             ];
@@ -59,7 +61,8 @@ export class RequestCarryUtils {
                     allow: [
                         PermissionFlagsBits.ViewChannel,
                         PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.ReadMessageHistory
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.UseApplicationCommands
                     ],
                 });
             }
@@ -71,13 +74,13 @@ export class RequestCarryUtils {
                         PermissionFlagsBits.ViewChannel,
                         PermissionFlagsBits.SendMessages,
                         PermissionFlagsBits.ReadMessageHistory,
-                        PermissionFlagsBits.ManageMessages
+                        PermissionFlagsBits.ManageMessages,
+                        PermissionFlagsBits.UseApplicationCommands
                     ],
                 });
             }
 
-            const gameName = data.game === 'av' ? 'av' : data.game === 'als' ? 'als' : data.game!;
-            const tempChannelName = `${data.type}-${gameName}-temp-${Date.now()}`;
+            const tempChannelName = `${data.type}-${data.game}-temp-${Date.now()}`;
 
             const ticketChannel = await guild.channels.create({
                 name: tempChannelName,
@@ -101,7 +104,7 @@ export class RequestCarryUtils {
                     claimed_by_tag: data.type === 'paid' && data.selectedHelper ? 'Selected Helper' : undefined
                 });
 
-                const finalChannelName = `${data.type}-${gameName}-${ticketResult.ticketNumber}`;
+                const finalChannelName = `${data.type}-${data.game}-${ticketResult.ticketNumber}`;
                 await ticketChannel.setName(finalChannelName);
 
                 await botLogger.logTicketCreated(ticketResult.ticketNumber, userId, data.type, data.game!);
@@ -132,13 +135,13 @@ export class RequestCarryUtils {
         userId: string
     ): Promise<void> {
         const ticketContainer = new ContainerBuilder();
-        
+
         if (!(ticketContainer as any).components) {
             (ticketContainer as any).components = [];
         }
 
         const headerSection = new TextDisplayBuilder()
-            .setContent(`# 🎫 Ticket Created`);
+            .setContent(`# 🎫 Ticket Created\n\n<@${userId}> - Your ticket has been created!`);
         (ticketContainer as any).components.push(headerSection);
 
         const typeSection = new TextDisplayBuilder()

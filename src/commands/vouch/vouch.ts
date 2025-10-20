@@ -19,8 +19,8 @@ const data = new SlashCommandBuilder()
     .setDescription("Vouch for a helper after receiving help")
     .addUserOption(option =>
         option.setName('helper')
-            .setDescription('The helper to vouch for')
-            .setRequired(true)
+            .setDescription('The helper to vouch for (auto-detected in ticket channels)')
+            .setRequired(false)
     );
 
 /**
@@ -72,24 +72,106 @@ export async function getUnvouchedTickets(userId: string, helperId: string): Pro
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
-        const helper = interaction.options.getUser('helper', true);
-        const unvouchedTickets = await getUnvouchedTickets(interaction.user.id, helper.id);
+        const db = new Database();
+        await db.connect();
 
-        if (unvouchedTickets.length === 0) {
-            await interaction.reply({
-                content: `❌ **No recent tickets found** with ${helper.tag}.\n\nYou can only vouch for helpers who have recently helped you in a ticket within the last 7 days, and you may have already reviewed all your tickets with this helper.`,
-                ephemeral: true
-            });
-            return;
-        }
+        let helper = interaction.options.getUser('helper');
+        let currentTicket = null;
 
-        // If multiple unvouched tickets, show selection
-        if (unvouchedTickets.length > 1) {
-            await showTicketSelection(interaction, helper.id, helper.tag, unvouchedTickets);
-        } else {
-            const ticket = unvouchedTickets[0];
-            console.log(`[VOUCH] Found ticket #${ticket.ticket_number} (ID: ${ticket.id}) for user ${interaction.user.tag} with helper ${helper.tag}`);
-            await showRatingSelection(interaction, helper.id, helper.tag, ticket.id, ticket.type);
+        try {
+            // Check if we're in a ticket channel
+            const ticket = await db.getTicketByChannelId(interaction.channelId);
+
+            if (ticket) {
+                currentTicket = ticket;
+
+                // Verify the user is the ticket owner
+                if (ticket.user_id !== interaction.user.id) {
+                    await interaction.reply({
+                        content: `❌ **You can only vouch for help you received.**\n\nThis is not your ticket.`,
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Check if ticket has a claimed helper
+                if (!ticket.claimed_by) {
+                    await interaction.reply({
+                        content: `❌ **No helper has claimed this ticket yet.**\n\nWait for a helper to claim your ticket, or specify a helper with \`/vouch helper:@username\`.`,
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // If no helper specified, use the ticket's helper
+                if (!helper) {
+                    try {
+                        helper = await interaction.client.users.fetch(ticket.claimed_by);
+                        console.log(`[VOUCH] Auto-detected helper ${helper.tag} from ticket channel #${ticket.ticket_number}`);
+                    } catch (error) {
+                        console.error('[VOUCH] Error fetching helper user:', error);
+                        await interaction.reply({
+                            content: `❌ **Could not find the helper who claimed this ticket.**\n\nPlease specify the helper manually with \`/vouch helper:@username\`.`,
+                            ephemeral: true
+                        });
+                        return;
+                    }
+                }
+
+                // Check if this ticket has already been vouched for
+                const existingVouchQuery = `
+                    SELECT * FROM vouches
+                    WHERE ticket_id = ? AND user_id = ?
+                `;
+                const existingVouch = (db as any).db!.prepare(existingVouchQuery).get([ticket.id, interaction.user.id]);
+
+                if (existingVouch) {
+                    await interaction.reply({
+                        content: `❌ **You have already vouched for this ticket.**\n\nYou can only vouch once per ticket.`,
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // If ticket status is open or claimed, we can vouch directly
+                if (ticket.status === 'open' || ticket.status === 'claimed') {
+                    console.log(`[VOUCH] Vouching in open/claimed ticket #${ticket.ticket_number} for helper ${helper.tag}`);
+                    await showRatingSelection(interaction, helper.id, helper.tag, ticket.id, ticket.type);
+                    return;
+                }
+            }
+
+            // If not in a ticket channel or ticket is closed, require helper parameter
+            if (!helper) {
+                await interaction.reply({
+                    content: `❌ **Please specify a helper to vouch for.**\n\nUse \`/vouch helper:@username\` or use this command in an active ticket channel.`,
+                    ephemeral: true
+                });
+                return;
+            }
+
+            // Original flow: find unvouched tickets with the specified helper
+            const unvouchedTickets = await getUnvouchedTickets(interaction.user.id, helper.id);
+
+            if (unvouchedTickets.length === 0) {
+                await interaction.reply({
+                    content: `❌ **No recent tickets found** with ${helper.tag}.\n\nYou can only vouch for helpers who have recently helped you in a ticket within the last 7 days, and you may have already reviewed all your tickets with this helper.`,
+                    ephemeral: true
+                });
+                return;
+            }
+
+            // If multiple unvouched tickets, show selection
+            if (unvouchedTickets.length > 1) {
+                await showTicketSelection(interaction, helper.id, helper.tag, unvouchedTickets);
+            } else {
+                const ticket = unvouchedTickets[0];
+                console.log(`[VOUCH] Found ticket #${ticket.ticket_number} (ID: ${ticket.id}) for user ${interaction.user.tag} with helper ${helper.tag}`);
+                await showRatingSelection(interaction, helper.id, helper.tag, ticket.id, ticket.type);
+            }
+
+        } finally {
+            await db.close();
         }
 
     } catch (error) {
