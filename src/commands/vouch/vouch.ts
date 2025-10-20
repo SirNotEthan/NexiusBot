@@ -118,6 +118,15 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                     }
                 }
 
+                // Check if ticket type is valid for vouching
+                if (ticket.type !== 'regular' && ticket.type !== 'paid') {
+                    await interaction.reply({
+                        content: `❌ **This ticket type does not support vouching.**\n\nYou can only vouch for regular or paid carry tickets.`,
+                        ephemeral: true
+                    });
+                    return;
+                }
+
                 // Check if this ticket has already been vouched for
                 const existingVouchQuery = `
                     SELECT * FROM vouches
@@ -136,7 +145,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                 // If ticket status is open or claimed, we can vouch directly
                 if (ticket.status === 'open' || ticket.status === 'claimed') {
                     console.log(`[VOUCH] Vouching in open/claimed ticket #${ticket.ticket_number} for helper ${helper.tag}`);
-                    await showRatingSelection(interaction, helper.id, helper.tag, ticket.id, ticket.type);
+                    await showRatingSelection(interaction, helper.id, helper.tag, ticket.id, ticket.type as 'regular' | 'paid');
                     return;
                 }
             }
