@@ -191,7 +191,7 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
         try {
             const helperRoleIds = process.env.HELPER_ROLE_IDS?.split(',') || [];
             const gameHelperRoleId = getGameHelperRoleId(ticket.game);
-            
+
             const rolesToDeny = [...helperRoleIds];
             if (gameHelperRoleId && !rolesToDeny.includes(gameHelperRoleId)) {
                 rolesToDeny.push(gameHelperRoleId);
@@ -214,7 +214,20 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
                 ManageMessages: false
             });
 
-            console.log(` Channel permissions updated - ticket #${ticket.ticket_number} now hidden from other helpers`);
+            // Add manager roles to the ticket when claimed
+            const managerRoleIds = process.env.MANAGER_ROLE_IDS?.split(',') || [];
+            for (const roleId of managerRoleIds) {
+                if (roleId.trim()) {
+                    await channel.permissionOverwrites.edit(roleId.trim(), {
+                        ViewChannel: true,
+                        SendMessages: true,
+                        ReadMessageHistory: true,
+                        ManageMessages: true
+                    });
+                }
+            }
+
+            console.log(` Channel permissions updated - ticket #${ticket.ticket_number} now hidden from other helpers, managers added`);
         } catch (permError) {
             console.warn(' Could not update channel permissions:', permError);
         }
