@@ -104,7 +104,7 @@ export class RequestCarryUtils {
                     claimed_by_tag: data.type === 'paid' && data.selectedHelper ? 'Selected Helper' : undefined
                 });
 
-                const finalChannelName = `${data.type}-${data.game}-${ticketResult.ticketNumber}`;
+                const finalChannelName = `${data.type}-${ticketResult.ticketNumber}`;
                 await ticketChannel.setName(finalChannelName);
 
                 await botLogger.logTicketCreated(ticketResult.ticketNumber, userId, data.type, data.game!);

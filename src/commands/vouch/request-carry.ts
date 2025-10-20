@@ -498,7 +498,7 @@ export async function createVouchTicket(
             });
 
             // Rename channel with actual ticket number
-            const finalChannelName = `${ticketData.type}-${ticketData.game}-${ticketResult.ticketNumber}`;
+            const finalChannelName = `${ticketData.type}-${ticketResult.ticketNumber}`;
             await ticketChannel.setName(finalChannelName);
 
             await botLogger.logTicketCreated(ticketResult.ticketNumber, userId, ticketData.type, ticketData.game!);

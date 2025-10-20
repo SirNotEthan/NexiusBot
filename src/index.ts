@@ -6,6 +6,7 @@ import { initializeDatabase, closeDatabase } from './database';
 import WeeklyScheduler from './utils/scheduler';
 import DailyScheduler from './utils/dailyScheduler';
 import ReminderScheduler from './utils/reminderScheduler';
+import AdScheduler from './utils/adScheduler';
 import { botLogger } from './utils/logger';
 
 dotenv.config();
@@ -36,6 +37,7 @@ client.selectMenus = new Collection();
 let weeklyScheduler: WeeklyScheduler;
 let dailyScheduler: DailyScheduler;
 let reminderScheduler: ReminderScheduler;
+let adScheduler: AdScheduler;
 
 async function loadCommands(): Promise<void> {
     client.commands.clear();
@@ -163,6 +165,9 @@ async function initializeBot(): Promise<void> {
         reminderScheduler = new ReminderScheduler(client);
         reminderScheduler.start();
 
+        adScheduler = new AdScheduler(client);
+        adScheduler.start();
+
         console.log('🚀 VouchBot initialization complete!');
         await botLogger.logBotStart();
     } catch (error) {
@@ -177,6 +182,7 @@ process.on('SIGINT', async () => {
     if (weeklyScheduler) weeklyScheduler.stop();
     if (dailyScheduler) dailyScheduler.stop();
     if (reminderScheduler) reminderScheduler.stop();
+    if (adScheduler) adScheduler.stop();
     await closeDatabase();
     client.destroy();
     process.exit(0);
@@ -188,6 +194,7 @@ process.on('SIGTERM', async () => {
     if (weeklyScheduler) weeklyScheduler.stop();
     if (dailyScheduler) dailyScheduler.stop();
     if (reminderScheduler) reminderScheduler.stop();
+    if (adScheduler) adScheduler.stop();
     await closeDatabase();
     client.destroy();
     process.exit(0);
