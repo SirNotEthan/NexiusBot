@@ -395,16 +395,15 @@ export async function processVouch(
             }
         }
 
-        // Close the ticket if channel ID is provided and get ticket number for logging
+        // Get ticket number for logging, but DON'T auto-close if ticket is still open/claimed
+        // Users should manually close tickets after vouching
         let ticketNumberForLog = 'Unknown';
         if (channelId) {
             const ticket = await db.getTicketByChannelId(channelId);
             if (ticket) {
                 ticketNumberForLog = ticket.ticket_number;
-                if (ticket.status !== 'closed') {
-                    await db.closeTicket(ticket.ticket_number);
-                    console.log(`[VOUCH] Closed ticket #${ticket.ticket_number} after vouch submission`);
-                }
+                // Don't auto-close - let users close manually after vouching
+                console.log(`[VOUCH] Vouch submitted for ticket #${ticket.ticket_number} (status: ${ticket.status}). Ticket remains ${ticket.status}.`);
             }
         }
 

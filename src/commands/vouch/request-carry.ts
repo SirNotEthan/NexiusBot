@@ -411,16 +411,20 @@ export async function createVouchTicket(
             throw new Error(`${ticketData.type === 'paid' ? 'Paid' : 'Regular'} tickets category ID for ${getGameDisplayName(ticketData.game!)} not configured`);
         }
 
-        const gameName = ticketData.game === 'av' ? 'av' : ticketData.game === 'als' ? 'als' : ticketData.game!;
-
         const permissionOverwrites = [
             {
                 id: guild.roles.everyone.id,
                 deny: [PermissionFlagsBits.ViewChannel],
+                allow: [PermissionFlagsBits.UseApplicationCommands],
             },
             {
                 id: userId,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.UseApplicationCommands
+                ],
             }
         ];
 
@@ -428,19 +432,30 @@ export async function createVouchTicket(
         if (gameHelperRoleId) {
             permissionOverwrites.push({
                 id: gameHelperRoleId,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.UseApplicationCommands
+                ],
             });
         }
 
         if (ticketData.type === 'paid' && ticketData.selectedHelper) {
             permissionOverwrites.push({
                 id: ticketData.selectedHelper,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages],
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.ManageMessages,
+                    PermissionFlagsBits.UseApplicationCommands
+                ],
             });
         }
 
         // Create temporary channel first
-        const tempChannelName = `${ticketData.type}-${gameName}-temp-${Date.now()}`;
+        const tempChannelName = `${ticketData.type}-${ticketData.game}-temp-${Date.now()}`;
         const ticketChannel = await guild.channels.create({
             name: tempChannelName,
             type: ChannelType.GuildText,
@@ -467,7 +482,7 @@ export async function createVouchTicket(
             });
 
             // Rename channel with actual ticket number
-            const finalChannelName = `${ticketData.type}-${gameName}-${ticketResult.ticketNumber}`;
+            const finalChannelName = `${ticketData.type}-${ticketData.game}-${ticketResult.ticketNumber}`;
             await ticketChannel.setName(finalChannelName);
 
             await botLogger.logTicketCreated(ticketResult.ticketNumber, userId, ticketData.type, ticketData.game!);
@@ -497,7 +512,7 @@ export async function createVouchTicket(
         const typeLabel = ticketData.type === 'paid' ? 'Paid Help Ticket' : 'Regular Help Ticket';
         const statusText = ticketData.type === 'paid' && ticketData.selectedHelper ? '\n**Status:** Assigned' : '';
         const headerText = new TextDisplayBuilder()
-            .setContent(`# 🎫 Ticket Created\n**Type:** ${typeLabel}${statusText}`);
+            .setContent(`# 🎫 Ticket Created\n\n<@${userId}> - Your ticket has been created!\n\n**Type:** ${typeLabel}${statusText}`);
         (mainContainer as any).components.push(headerText);
         (mainContainer as any).components.push(new SeparatorBuilder());
 
