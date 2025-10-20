@@ -245,21 +245,35 @@ async function submitTicket(buttonInteraction: ButtonInteraction, ticketData: an
         .setTimestamp();
 
     try {
+        // Build permission overwrites
+        const permissionOverwrites: any[] = [
+            {
+                id: guild.id,
+                deny: ['ViewChannel']
+            },
+            {
+                id: buttonInteraction.user.id,
+                allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
+            }
+        ];
+
+        // Add manager roles to initial permissions
+        const managerRoleIds = process.env.MANAGER_ROLE_IDS?.split(',') || [];
+        for (const roleId of managerRoleIds) {
+            if (roleId.trim()) {
+                permissionOverwrites.push({
+                    id: roleId.trim(),
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages']
+                });
+            }
+        }
+
         const ticketChannel = await guild.channels.create({
             name: `ticket-${ticketId}-${buttonInteraction.user.username}`,
             type: ChannelType.GuildText,
             parent: ticketCategoryId,
             reason: `Support ticket #${ticketId} created by ${buttonInteraction.user.tag}`,
-            permissionOverwrites: [
-                {
-                    id: guild.id,
-                    deny: ['ViewChannel']
-                },
-                {
-                    id: buttonInteraction.user.id,
-                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
-                }
-            ]
+            permissionOverwrites
         });
 
         const claimRow = new ActionRowBuilder<ButtonBuilder>().addComponents([

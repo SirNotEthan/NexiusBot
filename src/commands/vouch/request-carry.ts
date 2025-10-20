@@ -454,6 +454,22 @@ export async function createVouchTicket(
             });
         }
 
+        // Add manager roles to initial permissions
+        const managerRoleIds = process.env.MANAGER_ROLE_IDS?.split(',') || [];
+        for (const roleId of managerRoleIds) {
+            if (roleId.trim()) {
+                permissionOverwrites.push({
+                    id: roleId.trim(),
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.ManageMessages
+                    ]
+                });
+            }
+        }
+
         // Create temporary channel first
         const tempChannelName = `${ticketData.type}-${ticketData.game}-temp-${Date.now()}`;
         const ticketChannel = await guild.channels.create({
