@@ -10,7 +10,8 @@ import { safeReply, safeEditReply, safeDeferUpdate, isInteractionValid } from '.
 function getGameDisplayName(gameCode: string): string {
     const gameNames: { [key: string]: string } = {
         'als': 'Anime Last Stand',
-        'av': 'Anime Vanguards'
+        'av': 'Anime Vanguards',
+        'ac': 'Anime Crusaders'
     };
     return gameNames[gameCode] || gameCode.toUpperCase();
 }
@@ -39,6 +40,8 @@ function parseTicketDataFromInteraction(interaction: ButtonInteraction): VouchTi
             ticketData.game = 'als';
         } else if (fullContent.includes('Anime Vanguard')) {
             ticketData.game = 'av';
+        } else if (fullContent.includes('Anime Crusaders')) {
+            ticketData.game = 'ac';
         }
 
         // Parse gamemode from Components V2 content - look for gamemode value
@@ -90,7 +93,7 @@ function parseTicketDataFromInteraction(interaction: ButtonInteraction): VouchTi
         const customIdParts = interaction.customId.split('_');
         if (customIdParts.length > 2) {
             const gameFromId = customIdParts[customIdParts.length - 1];
-            if (gameFromId === 'av' || gameFromId === 'als') {
+            if (gameFromId === 'av' || gameFromId === 'als' || gameFromId === 'ac') {
                 ticketData.game = gameFromId;
             }
         }

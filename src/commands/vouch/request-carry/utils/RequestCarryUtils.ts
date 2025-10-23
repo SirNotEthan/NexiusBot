@@ -6,7 +6,8 @@ import { botLogger } from '../../../../utils/logger';
 function getGameDisplayName(gameCode: string): string {
     const gameNames: { [key: string]: string } = {
         'als': 'Anime Last Stand',
-        'av': 'Anime Vanguards'
+        'av': 'Anime Vanguards',
+        'ac': 'Anime Crusaders'
     };
     return gameNames[gameCode] || gameCode.toUpperCase();
 }
@@ -260,7 +261,7 @@ export class RequestCarryUtils {
 
         if (!data.game) {
             errors.push('Game is required');
-        } else if (!['als', 'av'].includes(data.game)) {
+        } else if (!['als', 'av', 'ac'].includes(data.game)) {
             errors.push('Invalid game selected');
         }
 
