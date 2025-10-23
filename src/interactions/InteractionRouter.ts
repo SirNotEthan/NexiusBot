@@ -644,10 +644,62 @@ export class InteractionRouter {
     }
 
     private static async handleServiceInfoGameSelection(interaction: StringSelectMenuInteraction): Promise<void> {
-        // Legacy implementation placeholder
-        await interaction.reply({
-            content: "Service information feature is being updated. Please check back later.",
-            ephemeral: true
-        });
+        try {
+            const selectedGame = interaction.values[0];
+            const { FREE_CARRIES_CONFIG, getGameDisplayName } = await import('../config/freeCarriesConfig');
+
+            const gameConfig = FREE_CARRIES_CONFIG[selectedGame];
+
+            if (!gameConfig) {
+                await interaction.reply({
+                    content: "❌ Game configuration not found.",
+                    ephemeral: true
+                });
+                return;
+            }
+
+            const { EmbedBuilder } = await import('discord.js');
+
+            // Create embed with gamemode limits
+            const embed = new EmbedBuilder()
+                .setTitle(`📊 ${gameConfig.displayName} - Free Carry Limits`)
+                .setDescription(`**Daily free carry limits for ${gameConfig.displayName}**\n\nThese limits reset daily at midnight UTC.`)
+                .setColor(0x5865f2);
+
+            // Add fields for each gamemode
+            const gamemodeEntries = Object.entries(gameConfig.gameLimits);
+            const fields = [];
+
+            for (const [gamemode, limit] of gamemodeEntries) {
+                const displayName = gamemode
+                    .split('-')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+
+                fields.push({
+                    name: `${displayName}`,
+                    value: `\`${limit}\` free carries per day`,
+                    inline: true
+                });
+            }
+
+            embed.addFields(fields);
+            embed.setFooter({
+                text: `${gameConfig.displayName} • Use /request-carry to create a ticket`,
+                iconURL: interaction.client.user?.displayAvatarURL()
+            });
+            embed.setTimestamp();
+
+            await interaction.reply({
+                embeds: [embed],
+                ephemeral: true
+            });
+        } catch (error) {
+            console.error('Error in service info game selection:', error);
+            await interaction.reply({
+                content: "❌ Failed to load service information. Please try again later.",
+                ephemeral: true
+            });
+        }
     }
 }

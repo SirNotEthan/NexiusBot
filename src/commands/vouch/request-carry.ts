@@ -130,6 +130,21 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
             return;
         }
 
+        // Check if user is blacklisted from tickets
+        const blacklistRoleId = process.env.TICKET_BLACKLIST_ROLE_ID;
+        if (blacklistRoleId && interaction.member && typeof interaction.member !== 'string' && 'roles' in interaction.member) {
+            const roleManager = interaction.member.roles;
+            if (roleManager && typeof roleManager === 'object' && 'cache' in roleManager) {
+                if (roleManager.cache.has(blacklistRoleId)) {
+                    await safeReply(interaction, {
+                        content: '🚫 **Access Denied**\n\nYou are currently blacklisted from creating carry request tickets. If you believe this is a mistake, please contact a staff member.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+            }
+        }
+
         if (cooldownManager.isOnCooldown(interaction.user.id, 'carry_request')) {
             const remainingTime = cooldownManager.getRemainingCooldown(interaction.user.id, 'carry_request');
             const timeString = cooldownManager.formatRemainingTime(remainingTime);

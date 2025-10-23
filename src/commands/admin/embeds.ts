@@ -187,7 +187,7 @@ async function sendServiceInfoEmbed(interaction: ChatInputCommandInteraction): P
         .addFields([
             {
                 name: '🎮 **Available Games**',
-                value: '• **Anime Last Stand (ALS)**\n• **Anime Vanguards (AV)**',
+                value: '• **Anime Last Stand (ALS)**\n• **Anime Vanguards (AV)**\n• **Anime Crusaders (AC)**',
                 inline: false
             },
             {
@@ -220,7 +220,12 @@ async function sendServiceInfoEmbed(interaction: ChatInputCommandInteraction): P
                 .setLabel('Anime Vanguards (AV)')
                 .setDescription('View free carry limits for AV gamemodes')
                 .setValue('av')
-                .setEmoji('🛡️')
+                .setEmoji('🛡️'),
+            new StringSelectMenuOptionBuilder()
+                .setLabel('Anime Crusaders (AC)')
+                .setDescription('View free carry limits for AC gamemodes')
+                .setValue('ac')
+                .setEmoji('⚡')
         ]);
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(gameSelectMenu);
