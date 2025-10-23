@@ -147,40 +147,49 @@ export class RequestCarryModalHandler {
     private static async syncWithCurrentState(interaction: ModalSubmitInteraction, userId: string): Promise<void> {
         try {
             const currentData = RequestCarryButtonHandler.getSessionData(userId);
-            
-            // Parse current state from message components
-            const fullContent = JSON.stringify(interaction.message?.components || {});
-            
-            // Parse game from display text
-            if (fullContent.includes('Anime Last Stand') && !currentData.game) {
-                currentData.game = 'als';
-            } else if (fullContent.includes('Anime Vanguard') && !currentData.game) {
-                currentData.game = 'av';
-            } else if (fullContent.includes('Anime Crusaders') && !currentData.game) {
-                currentData.game = 'ac';
+
+            if (currentData.game && currentData.gamemode && currentData.canJoinLinks !== undefined) {
+                console.log('[MODAL_SYNC] Session data complete, skipping sync');
+                return;
             }
-            
+
+            const fullContent = JSON.stringify(interaction.message?.components || {});
+
+            if (!currentData.game) {
+                if (fullContent.includes('Anime Last Stand')) {
+                    currentData.game = 'als';
+                } else if (fullContent.includes('Anime Vanguard')) {
+                    currentData.game = 'av';
+                } else if (fullContent.includes('Anime Crusaders')) {
+                    currentData.game = 'ac';
+                }
+            }
+
             if (!currentData.gamemode) {
-                const gamemodes = ['spirit-invasion', 'story', 'legend-stages', 'raids', 'dungeons', 'survival', 'breach', 'portals', 'rift', 'inf', 'sjw-dungeon', 'void', 'towers', 'events'];
+                const gamemodes = ['spirit-invasion', 'legend-stages', 'sjw-dungeon', 'story', 'raids', 'dungeons', 'survival', 'breach', 'portals', 'rift', 'inf', 'void', 'towers', 'events'];
                 for (const gamemode of gamemodes) {
                     if (fullContent.toLowerCase().includes(gamemode)) {
                         currentData.gamemode = gamemode;
+                        console.log(`[MODAL_SYNC] Detected gamemode: ${gamemode}`);
                         break;
                     }
                 }
             }
-            
+
             if (currentData.canJoinLinks === undefined) {
-                if (fullContent.includes('Yes - Can join Discord voice channels') || 
+                if (fullContent.includes('I can Join Links') ||
+                    fullContent.includes('Yes - Can join Discord voice channels') ||
                     fullContent.includes('Can join Discord voice channels and links')) {
                     currentData.canJoinLinks = true;
-                } else if (fullContent.includes('No - Cannot join Discord voice channels') || 
+                } else if (fullContent.includes('I need to add The Helper') ||
+                           fullContent.includes('No - Cannot join Discord voice channels') ||
                            fullContent.includes('Cannot join Discord voice channels and links')) {
                     currentData.canJoinLinks = false;
                 }
             }
-            
+
             RequestCarryButtonHandler.setSessionData(userId, currentData);
+            console.log('[MODAL_SYNC] Session data after sync:', { game: currentData.game, gamemode: currentData.gamemode, hasGoal: !!currentData.goal, canJoinLinks: currentData.canJoinLinks });
         } catch (error) {
             console.warn('Error syncing session data with current state:', error);
         }
