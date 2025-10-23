@@ -462,7 +462,7 @@ export async function createVouchTicket(
             throw new Error(`${ticketData.type === 'paid' ? 'Paid' : 'Regular'} tickets category ID for ${getGameDisplayName(ticketData.game!)} not configured`);
         }
 
-        const permissionOverwrites = [
+        const permissionOverwrites: any[] = [
             {
                 id: guild.roles.everyone.id,
                 deny: [PermissionFlagsBits.ViewChannel],
@@ -481,42 +481,51 @@ export async function createVouchTicket(
 
         const gameHelperRoleId = getGameHelperRoleId(ticketData.game!);
         if (gameHelperRoleId) {
-            permissionOverwrites.push({
-                id: gameHelperRoleId,
-                allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.SendMessages,
-                    PermissionFlagsBits.ReadMessageHistory,
-                    PermissionFlagsBits.UseApplicationCommands
-                ],
-            });
+            const gameHelperRole = guild.roles.cache.get(gameHelperRoleId);
+            if (gameHelperRole) {
+                permissionOverwrites.push({
+                    id: gameHelperRole.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.UseApplicationCommands
+                    ],
+                });
+            }
         }
 
         if (ticketData.type === 'paid' && ticketData.selectedHelper) {
-            permissionOverwrites.push({
-                id: ticketData.selectedHelper,
-                allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.SendMessages,
-                    PermissionFlagsBits.ReadMessageHistory,
-                    PermissionFlagsBits.ManageMessages,
-                    PermissionFlagsBits.UseApplicationCommands
-                ],
-            });
+            const helperMember = await guild.members.fetch(ticketData.selectedHelper).catch(() => null);
+            if (helperMember) {
+                permissionOverwrites.push({
+                    id: helperMember.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.ManageMessages,
+                        PermissionFlagsBits.UseApplicationCommands
+                    ],
+                });
+            }
         }
 
         const managerRoleIds = process.env.MANAGER_ROLE_IDS?.split(',') || [];
         for (const roleId of managerRoleIds) {
             if (roleId.trim()) {
-                permissionOverwrites.push({
-                    id: roleId.trim(),
-                    allow: [
-                        PermissionFlagsBits.ViewChannel,
-                        PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.ReadMessageHistory,
-                        PermissionFlagsBits.ManageMessages
-                    ]
-                });
+                const managerRole = guild.roles.cache.get(roleId.trim());
+                if (managerRole) {
+                    permissionOverwrites.push({
+                        id: managerRole.id,
+                        allow: [
+                            PermissionFlagsBits.ViewChannel,
+                            PermissionFlagsBits.SendMessages,
+                            PermissionFlagsBits.ReadMessageHistory,
+                            PermissionFlagsBits.ManageMessages
+                        ]
+                    });
+                }
             }
         }
 
