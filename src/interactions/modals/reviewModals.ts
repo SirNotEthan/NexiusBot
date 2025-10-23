@@ -121,7 +121,7 @@ export async function handleReviewModal(interaction: ModalSubmitInteraction): Pr
 
         await interaction.followUp({
             embeds: [confirmationEmbed],
-            flags: [64] // ephemeral
+            flags: [64] 
         });
 
         console.log(`Review completed by ${interaction.user.tag} for ticket #${ticketNumber}: ${rating} stars`);

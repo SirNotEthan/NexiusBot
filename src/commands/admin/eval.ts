@@ -63,7 +63,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     await interaction.deferReply({ ephemeral });
 
     try {
-        // Prepare safe execution context
+        
         const client = interaction.client;
         const guild = interaction.guild;
         const channel = interaction.channel;
@@ -71,35 +71,31 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         const member = interaction.member;
         const db = new Database();
         
-        // Connect database for eval usage
         await db.connect();
 
         let evaled: any;
         const startTime = Date.now();
         
         try {
-            // Execute the code
+            
             evaled = eval(code);
             
-            // Handle promises
             if (evaled instanceof Promise) {
                 evaled = await evaled;
             }
         } finally {
-            // Always close database connection
+            
             await db.close();
         }
 
         const executionTime = Date.now() - startTime;
 
-        // Format output
         let output = inspect(evaled, { 
             depth: 2, 
             maxArrayLength: 10,
             maxStringLength: 500
         });
 
-        // Truncate if too long
         if (output.length > 1900) {
             output = output.substring(0, 1900) + '\n... (truncated)';
         }

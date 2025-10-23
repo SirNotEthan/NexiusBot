@@ -44,7 +44,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     try {
         await db.connect();
 
-        // Get stats before reset
         const beforeQuery = 'SELECT COUNT(*) as count FROM user_messages WHERE date = ?';
         const today = new Date().toISOString().split('T')[0];
         const beforeStats = db['db']!.prepare(beforeQuery).get([today]) as { count: number };
@@ -52,10 +51,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         const beforeCarryQuery = 'SELECT COUNT(*) as count FROM free_carry_usage WHERE date = ?';
         const beforeCarryStats = db['db']!.prepare(beforeCarryQuery).get([today]) as { count: number };
 
-        // Perform reset
         await db.resetDailyStats();
 
-        // Get stats after reset
         const afterQuery = 'SELECT COUNT(*) as count FROM user_messages WHERE date = ?';
         const afterStats = db['db']!.prepare(afterQuery).get([today]) as { count: number };
 

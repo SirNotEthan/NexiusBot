@@ -101,7 +101,7 @@ class DatabaseManager extends EventEmitter {
     private currentConnection = 0;
     
     private queryCache = new Map<string, {data: any, timestamp: number}>();
-    private cacheTimeout = 60000; // 1 minute
+    private cacheTimeout = 60000; 
 
     constructor() {
         super();
@@ -136,9 +136,9 @@ class DatabaseManager extends EventEmitter {
 
         this.db.run('PRAGMA journal_mode = WAL');
         this.db.run('PRAGMA synchronous = NORMAL');
-        this.db.run('PRAGMA cache_size = -64000'); // 64MB cache
+        this.db.run('PRAGMA cache_size = -64000'); 
         this.db.run('PRAGMA temp_store = MEMORY');
-        this.db.run('PRAGMA mmap_size = 268435456'); // 256MB mmap
+        this.db.run('PRAGMA mmap_size = 268435456'); 
 
         console.log('✅ Database optimizations applied');
     }

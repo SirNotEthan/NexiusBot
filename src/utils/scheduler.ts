@@ -81,8 +81,7 @@ export class WeeklyScheduler {
     }
 
     private async removeExpiredPaidHelperBios(): Promise<void> {
-        // Bio functionality removed - paid helpers are now managed by staff only
-        // This method is kept as a placeholder for potential future cleanup tasks
+        
         console.log('ℹ️ Bio cleanup skipped (feature removed)');
     }
 

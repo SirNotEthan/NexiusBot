@@ -23,15 +23,12 @@ const data = new SlashCommandBuilder()
             .setRequired(false)
     );
 
-/**
- * Get unvouched tickets for a user with a specific helper
- */
 export async function getUnvouchedTickets(userId: string, helperId: string): Promise<any[]> {
     const db = new Database();
     await db.connect();
 
     try {
-        // Check if the user has any recent tickets (open, claimed, or closed) with this helper
+        
         const recentTicketsQuery = `
             SELECT * FROM tickets
             WHERE user_id = ? AND claimed_by = ? AND status IN ('open', 'claimed', 'closed')
@@ -49,14 +46,13 @@ export async function getUnvouchedTickets(userId: string, helperId: string): Pro
             return [];
         }
 
-        // Filter out tickets that have already been vouched for
         const unvouchedTickets = [];
         for (const ticket of recentTickets) {
             const existingVouchQuery = `
                 SELECT * FROM vouches
                 WHERE ticket_id = ? AND user_id = ?
             `;
-            // Note: ticket_id in vouches table is the internal ticket.id, not ticket_number
+            
             const existingVouch = (db as any).db!.prepare(existingVouchQuery).all([ticket.id, userId]);
 
             if (!existingVouch || existingVouch.length === 0) {
@@ -79,13 +75,12 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         let currentTicket = null;
 
         try {
-            // Check if we're in a ticket channel
+            
             const ticket = await db.getTicketByChannelId(interaction.channelId);
 
             if (ticket) {
                 currentTicket = ticket;
 
-                // Verify the user is the ticket owner
                 if (ticket.user_id !== interaction.user.id) {
                     await interaction.reply({
                         content: `❌ **You can only vouch for help you received.**\n\nThis is not your ticket.`,
@@ -94,7 +89,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                     return;
                 }
 
-                // Check if ticket has a claimed helper
                 if (!ticket.claimed_by) {
                     await interaction.reply({
                         content: `❌ **No helper has claimed this ticket yet.**\n\nWait for a helper to claim your ticket, or specify a helper with \`/vouch helper:@username\`.`,
@@ -103,7 +97,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                     return;
                 }
 
-                // If no helper specified, use the ticket's helper
                 if (!helper) {
                     try {
                         helper = await interaction.client.users.fetch(ticket.claimed_by);
@@ -118,7 +111,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                     }
                 }
 
-                // Check if ticket type is valid for vouching
                 if (ticket.type !== 'regular' && ticket.type !== 'paid') {
                     await interaction.reply({
                         content: `❌ **This ticket type does not support vouching.**\n\nYou can only vouch for regular or paid carry tickets.`,
@@ -127,7 +119,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                     return;
                 }
 
-                // Check if this ticket has already been vouched for
                 const existingVouchQuery = `
                     SELECT * FROM vouches
                     WHERE ticket_id = ? AND user_id = ?
@@ -142,7 +133,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                     return;
                 }
 
-                // If ticket status is open or claimed, we can vouch directly
                 if (ticket.status === 'open' || ticket.status === 'claimed') {
                     console.log(`[VOUCH] Vouching in open/claimed ticket #${ticket.ticket_number} for helper ${helper.tag}`);
                     await showRatingSelection(interaction, helper.id, helper.tag, ticket.id, ticket.type as 'regular' | 'paid');
@@ -150,7 +140,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                 }
             }
 
-            // If not in a ticket channel or ticket is closed, require helper parameter
             if (!helper) {
                 await interaction.reply({
                     content: `❌ **Please specify a helper to vouch for.**\n\nUse \`/vouch helper:@username\` or use this command in an active ticket channel.`,
@@ -159,7 +148,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                 return;
             }
 
-            // Original flow: find unvouched tickets with the specified helper
             const unvouchedTickets = await getUnvouchedTickets(interaction.user.id, helper.id);
 
             if (unvouchedTickets.length === 0) {
@@ -170,7 +158,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
                 return;
             }
 
-            // If multiple unvouched tickets, show selection
             if (unvouchedTickets.length > 1) {
                 await showTicketSelection(interaction, helper.id, helper.tag, unvouchedTickets);
             } else {
@@ -224,7 +211,6 @@ export async function showTicketSelection(
         ephemeral: true
     };
 
-    // Handle both ChatInputCommandInteraction and ButtonInteraction
     if (interaction.replied || interaction.deferred) {
         await interaction.editReply(replyOptions);
     } else if ('update' in interaction && typeof interaction.update === 'function') {
@@ -272,7 +258,6 @@ export async function showRatingSelection(
         ephemeral: true
     };
 
-    // Handle both ChatInputCommandInteraction and ButtonInteraction
     if (interaction.replied || interaction.deferred) {
         await interaction.editReply(replyOptions);
     } else if ('update' in interaction && typeof interaction.update === 'function') {
@@ -342,7 +327,7 @@ export async function processVouch(
     await db.connect();
 
     try {
-        // Ensure helper exists in the database before creating vouch (foreign key constraint)
+        
         let helper = await db.getHelper(helperId);
         if (!helper) {
             console.log(`[VOUCH] Helper ${helperId} (${helperTag}) not found in database, creating new helper record...`);
@@ -395,14 +380,12 @@ export async function processVouch(
             }
         }
 
-        // Get ticket number for logging, but DON'T auto-close if ticket is still open/claimed
-        // Users should manually close tickets after vouching
         let ticketNumberForLog = 'Unknown';
         if (channelId) {
             const ticket = await db.getTicketByChannelId(channelId);
             if (ticket) {
                 ticketNumberForLog = ticket.ticket_number;
-                // Don't auto-close - let users close manually after vouching
+                
                 console.log(`[VOUCH] Vouch submitted for ticket #${ticket.ticket_number} (status: ${ticket.status}). Ticket remains ${ticket.status}.`);
             }
         }
@@ -449,7 +432,6 @@ async function logVouchToHistory(guildId: string, vouchData: {
         
         if (!historyChannelId) return;
         
-        // Fetch channel directly from client instead of guild to handle cross-guild channels
         const historyChannel = await client.channels.fetch(historyChannelId);
         if (!historyChannel?.isTextBased()) return;
 

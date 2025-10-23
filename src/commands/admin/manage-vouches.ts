@@ -165,7 +165,7 @@ async function handleAddVouch(interaction: ChatInputCommandInteraction): Promise
     await db.connect();
 
     try {
-        // Check if helper exists, if not create them
+        
         let helperRecord = await db.getHelper(helper.id);
         if (!helperRecord) {
             await db.createHelper({
@@ -183,7 +183,6 @@ async function handleAddVouch(interaction: ChatInputCommandInteraction): Promise
             helperRecord = await db.getHelper(helper.id);
         }
 
-        // Create the vouch
         await db.createVouch({
             ticket_id: ticketId,
             helper_id: helper.id,
@@ -196,7 +195,6 @@ async function handleAddVouch(interaction: ChatInputCommandInteraction): Promise
             compensation: compensation || undefined
         });
 
-        // Update helper stats
         if (helperRecord) {
             const newTotalVouches = helperRecord.total_vouches + 1;
             const newWeeklyVouches = helperRecord.weekly_vouches + 1;
@@ -243,7 +241,6 @@ async function handleAddVouch(interaction: ChatInputCommandInteraction): Promise
 
         await interaction.reply({ embeds: [successEmbed] });
 
-        // Log to history channel
         await logVouchToHistory(interaction.guild!.id, {
             userId: user.id,
             userTag: user.tag,
@@ -269,7 +266,7 @@ async function handleRemoveVouch(interaction: ChatInputCommandInteraction): Prom
     await db.connect();
 
     try {
-        // Get the vouch details first
+        
         const vouch = await db.getVouchById(vouchId);
 
         if (!vouch) {
@@ -282,17 +279,14 @@ async function handleRemoveVouch(interaction: ChatInputCommandInteraction): Prom
             return;
         }
 
-        // Delete the vouch
         await db.deleteVouch(vouchId);
 
-        // Update helper stats
         const helper = await db.getHelper(vouch.helper_id);
         if (helper && helper.total_vouches > 0) {
             const newTotalVouches = Math.max(0, helper.total_vouches - 1);
             const newWeeklyVouches = Math.max(0, helper.weekly_vouches - 1);
             const newMonthlyVouches = Math.max(0, helper.monthly_vouches - 1);
 
-            // Recalculate average rating
             const allVouches = await db.getHelperVouches(vouch.helper_id);
             const newAverageRating = allVouches.length > 0
                 ? allVouches.reduce((sum, v) => sum + v.rating, 0) / allVouches.length
@@ -367,7 +361,6 @@ async function handleListVouches(interaction: ChatInputCommandInteraction): Prom
             ]);
         }
 
-        // Show most recent vouches
         const recentVouches = vouches.slice(0, limit);
         for (let i = 0; i < recentVouches.length; i++) {
             const vouch = recentVouches[i];
@@ -475,7 +468,6 @@ async function handleSearchVouches(interaction: ChatInputCommandInteraction): Pr
             .setColor(0x5865f2)
             .setTimestamp();
 
-        // Show most recent vouches
         const recentVouches = vouches.slice(0, limit);
         for (let i = 0; i < recentVouches.length; i++) {
             const vouch = recentVouches[i];

@@ -12,14 +12,13 @@ export class AdScheduler {
     }
 
     start(): void {
-        // Run every 3 hours (3 * 60 * 60 * 1000 milliseconds)
+        
         this.intervalId = setInterval(async () => {
             await this.sendAdvertisement();
         }, 3 * 60 * 60 * 1000);
 
         console.log('✅ Advertisement scheduler started (runs every 3 hours)');
 
-        // Send the first advertisement immediately when the bot starts
         this.sendAdvertisement();
     }
 
@@ -42,13 +41,11 @@ export class AdScheduler {
 
             const textChannel = channel as TextChannel;
 
-            // Create a container message
             const container = new ContainerBuilder();
             if (!(container as any).components) {
                 (container as any).components = [];
             }
 
-            // Add the text display to the container
             const textDisplay = new TextDisplayBuilder()
                 .setContent(`<@&${this.AD_ROLE_ID}> \n\nIt is time to post the advertisement message in ${this.AD_LINK}`);
 

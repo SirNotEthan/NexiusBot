@@ -93,7 +93,6 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
         return;
     }
 
-    // Ensure helper exists in database before claiming ticket
     let helper = await db.getHelper(interaction.user.id);
     if (!helper) {
         console.log(`[CLAIM_TICKET] Helper ${interaction.user.id} (${interaction.user.tag}) not found in database, creating new helper record...`);
@@ -118,45 +117,39 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
 
     const originalMessage = interaction.message;
     
-    // Update the original message to include claimed by information in Components V2 format
     const originalComponents = originalMessage?.components || [];
     const updatedComponents = [];
     
-    // Find and update containers, filter out existing button containers
     for (const component of originalComponents) {
-        if (component.type === 1) { // Action row - skip existing button rows
+        if (component.type === 1) { 
             continue;
         } else {
-            // This should be the main container with ticket information
+            
             const updatedContainer = JSON.parse(JSON.stringify(component));
 
-            // Remove any existing action rows from the container to prevent duplicates
             if (updatedContainer.components) {
                 const originalLength = updatedContainer.components.length;
                 updatedContainer.components = updatedContainer.components.filter((comp: any) => comp.type !== 1);
                 console.log(`[LEGACY_CLAIM_DEBUG] Filtered action rows: ${originalLength} -> ${updatedContainer.components.length}`);
             }
 
-            // Find the position to insert claimed by information (after the header separator)
             let insertIndex = -1;
             for (let i = 0; i < updatedContainer.components.length; i++) {
                 const comp = updatedContainer.components[i];
-                if (comp.type === 2) { // Separator
+                if (comp.type === 2) { 
                     insertIndex = i + 1;
                     break;
                 }
             }
 
-            // If we found a separator, insert the claimed by information after it
             if (insertIndex > 0) {
                 const claimedBySection = {
-                    type: 13, // TextDisplay
+                    type: 13, 
                     content: `**Claimed by:** ${interaction.user} (\`${interaction.user.tag}\`)`
                 };
                 updatedContainer.components.splice(insertIndex, 0, claimedBySection);
             }
 
-            // Only add container if it has valid components
             if (updatedContainer.components && updatedContainer.components.length > 0) {
                 updatedComponents.push(updatedContainer);
                 console.log(`[LEGACY_CLAIM_DEBUG] Added container with ${updatedContainer.components.length} components`);
@@ -166,13 +159,11 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
         }
     }
 
-    // Add helper control buttons using ContainerBuilder for Components V2
     const buttonContainer = new ContainerBuilder();
     if (!(buttonContainer as any).components) {
         (buttonContainer as any).components = [];
     }
 
-    // Create appropriate buttons for claimed ticket (Unclaim, not Claim)
     const buttons = [
         new ButtonBuilder()
             .setCustomId(`ring_helper_${ticket.ticket_number}`)
@@ -193,13 +184,11 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
 
     console.log(`[LEGACY_CLAIM_DEBUG] Creating button row with ${buttons.length} buttons for claimed ticket #${ticket.ticket_number}`);
 
-    // Validate buttons before creating action row
     if (buttons.length === 0) {
         console.error(`[LEGACY_CLAIM_DEBUG] No buttons to create for ticket #${ticket.ticket_number}`);
         return;
     }
 
-    // Create action row for buttons within the container
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
     (buttonContainer as any).components.push(buttonRow);
 
@@ -233,7 +222,6 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
                 ManageMessages: false
             });
 
-            // Add manager roles to the ticket when claimed
             const managerRoleIds = process.env.MANAGER_ROLE_IDS?.split(',') || [];
             for (const roleId of managerRoleIds) {
                 if (roleId.trim()) {
@@ -256,9 +244,8 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
 
     await interaction.deferUpdate();
 
-    // Add the button container to components - but validate first
     if ((buttonContainer as any).components && (buttonContainer as any).components.length > 0) {
-        // Check that each component in the container has valid structure
+        
         let validContainer = true;
         (buttonContainer as any).components.forEach((comp: any, index: number) => {
             if (!comp.components || comp.components.length === 0) {
@@ -279,7 +266,6 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
 
     console.log(`[LEGACY_CLAIM_DEBUG] Attempting to update message with ${updatedComponents.length} components`);
 
-    // Log detailed component structure for debugging and final validation
     const validatedComponents = [];
     updatedComponents.forEach((component, index) => {
         console.log(`[LEGACY_CLAIM_DEBUG] Component ${index}:`, {
@@ -289,14 +275,13 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
             componentTypes: component.components?.map((c: any) => ({ type: c.type, hasComponents: !!c.components, componentsLength: c.components?.length })) || []
         });
 
-        // Final validation: ensure component has valid structure
         if (component.components && component.components.length > 0) {
-            // Check if all sub-components are valid
+            
             const validSubComponents = component.components.every((subComp: any) => {
-                if (subComp.type === 1) { // Action Row
+                if (subComp.type === 1) { 
                     return subComp.components && subComp.components.length > 0 && subComp.components.length <= 5;
                 }
-                return true; // Other component types
+                return true; 
             });
 
             if (validSubComponents) {
@@ -328,7 +313,6 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
     } catch (updateError) {
         console.error(`[LEGACY_CLAIM_DEBUG] Error updating message for ticket #${ticket.ticket_number}:`, updateError);
 
-        // Try to send a simple follow-up instead
         try {
             await interaction.followUp({
                 content: `❌ **Error updating message, but ticket #${ticket.ticket_number} has been claimed successfully.**\n\n${claimMessage}`,
@@ -441,7 +425,6 @@ export async function handleCloseTicket(interaction: ButtonInteraction): Promise
             return;
         }
 
-        // If ticket creator wants to close but there's a claimed helper, ask for authorization
         if (isOwner && !isAssignedHelper && ticket.claimed_by) {
             await showHelperAuthorizationPrompt(interaction, ticket);
             return;
@@ -453,7 +436,7 @@ export async function handleCloseTicket(interaction: ButtonInteraction): Promise
         });
         return;
     } else if (isOwner && ticket.claimed_by && interaction.user.id !== ticket.claimed_by) {
-        // If ticket creator wants to close but there's a claimed helper, ask for authorization
+        
         await showHelperAuthorizationPrompt(interaction, ticket);
         return;
     }
@@ -555,8 +538,6 @@ async function generateAndSendTicketTranscript(interaction: ButtonInteraction, t
             files: [attachment]
         });
 
-        // DM functionality removed as requested
-
         console.log(` Transcript saved for ticket #${ticket.ticket_number}`);
         
         setTimeout(async () => {
@@ -566,7 +547,7 @@ async function generateAndSendTicketTranscript(interaction: ButtonInteraction, t
             } catch (deleteError) {
                 console.error(` Error deleting ticket channel for ticket #${ticket.ticket_number}:`, deleteError);
             }
-        }, 10000); // 10 second delay
+        }, 10000); 
         
     } catch (error) {
         console.error(` Error generating transcript for ticket #${ticket.ticket_number}:`, error);
@@ -749,7 +730,6 @@ export async function handleRingHelper(interaction: ButtonInteraction): Promise<
         (ringContainer as any).components = [];
     }
 
-    // Create a single, clean text display with all information
     const pingContent = [
         `# 🔔 Helper Needed!`,
         ``,
@@ -862,13 +842,11 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
         }
     }
 
-    // Restore original helper control buttons using ContainerBuilder for Components V2
     const buttonContainer = new ContainerBuilder();
     if (!(buttonContainer as any).components) {
         (buttonContainer as any).components = [];
     }
 
-    // Create appropriate buttons for unclaimed ticket (only Claim, not Unclaim)
     const buttons = [
         new ButtonBuilder()
             .setCustomId(`claim_ticket_${ticket.ticket_number}`)
@@ -889,13 +867,11 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
 
     console.log(`[LEGACY_UNCLAIM_DEBUG] Creating button row with ${buttons.length} buttons for unclaimed ticket #${ticket.ticket_number}`);
 
-    // Validate buttons before creating action row
     if (buttons.length === 0) {
         console.error(`[LEGACY_UNCLAIM_DEBUG] No buttons to create for ticket #${ticket.ticket_number}`);
         return;
     }
 
-    // Create action row for buttons within the container
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
     (buttonContainer as any).components.push(buttonRow);
 
@@ -936,9 +912,8 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
 
     await interaction.deferUpdate();
 
-    // Add the button container to components - but validate first
     if ((buttonContainer as any).components && (buttonContainer as any).components.length > 0) {
-        // Check that each component in the container has valid structure
+        
         let validContainer = true;
         (buttonContainer as any).components.forEach((comp: any, index: number) => {
             if (!comp.components || comp.components.length === 0) {
@@ -959,7 +934,6 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
 
     console.log(`[LEGACY_UNCLAIM_DEBUG] Attempting to update message with ${updatedComponents.length} components`);
 
-    // Log detailed component structure for debugging and final validation
     const validatedComponents = [];
     updatedComponents.forEach((component, index) => {
         console.log(`[LEGACY_UNCLAIM_DEBUG] Component ${index}:`, {
@@ -969,14 +943,13 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
             componentTypes: component.components?.map((c: any) => ({ type: c.type, hasComponents: !!c.components, componentsLength: c.components?.length })) || []
         });
 
-        // Final validation: ensure component has valid structure
         if (component.components && component.components.length > 0) {
-            // Check if all sub-components are valid
+            
             const validSubComponents = component.components.every((subComp: any) => {
-                if (subComp.type === 1) { // Action Row
+                if (subComp.type === 1) { 
                     return subComp.components && subComp.components.length > 0 && subComp.components.length <= 5;
                 }
-                return true; // Other component types
+                return true; 
             });
 
             if (validSubComponents) {
@@ -1008,7 +981,6 @@ export async function handleUnclaimTicket(interaction: ButtonInteraction): Promi
     } catch (updateError) {
         console.error(`[LEGACY_UNCLAIM_DEBUG] Error updating message for ticket #${ticket.ticket_number}:`, updateError);
 
-        // Try to send a simple follow-up instead
         try {
             await interaction.followUp({
                 content: `❌ **Error updating message, but ticket #${ticket.ticket_number} has been unclaimed successfully.**\n\n${unclaimMessage}`,
@@ -1027,7 +999,6 @@ export async function finalizeTicketClosure(interaction: ButtonInteraction, tick
     
     await botLogger.logTicketClosed(ticket.ticket_number, 'Ticket completed', ticket.user_id);
 
-    // Create closed ticket display using ContainerBuilder Components V2
     const closedContainer = new ContainerBuilder();
     if (!(closedContainer as any).components) {
         (closedContainer as any).components = [];
@@ -1039,14 +1010,12 @@ export async function finalizeTicketClosure(interaction: ButtonInteraction, tick
     const detailsText = new TextDisplayBuilder()
         .setContent(`**Gamemode:** \`${capitalizeFirstLetter(ticket.gamemode)}\`\n**Goal:** \`${ticket.goal}\`\n**Contact:** \`${ticket.contact}\`\n**Submitted by:** <@${ticket.user_id}> (\`${ticket.user_tag}\`)`);
 
-    // Add claimed by information if available
     if (ticket.claimed_by) {
         const claimedText = new TextDisplayBuilder()
             .setContent(`**Was claimed by:** <@${ticket.claimed_by}> (\`${ticket.claimed_by_tag}\`)`);
         (closedContainer as any).components.push(claimedText);
     }
 
-    // Add closed by information
     const closedByText = new TextDisplayBuilder()
         .setContent(`**Closed by:** <@${interaction.user.id}> (\`${interaction.user.tag}\`)\n**Time:** ${new Date().toLocaleString()}`);
     (closedContainer as any).components.push(titleText, detailsText, closedByText);
@@ -1152,7 +1121,7 @@ export async function closeTicketAfterReview(ticket: any, channelId: string, gui
             } catch (deleteError) {
                 console.error(` Error deleting ticket channel for ticket #${ticket.ticket_number}:`, deleteError);
             }
-        }, 10000); // 10 second delay
+        }, 10000); 
 
         console.log(` Ticket #${ticket.ticket_number} successfully closed after review submission`);
 
@@ -1251,8 +1220,6 @@ async function generateTicketTranscriptForChannel(ticketChannel: TextChannel, ti
             files: [attachment]
         });
 
-        // DM functionality removed as requested
-
         console.log(` Transcript saved for ticket #${ticket.ticket_number}`);
 
     } catch (error) {
@@ -1265,7 +1232,7 @@ export async function handleAuthorizeClose(interaction: ButtonInteraction): Prom
         console.log(`[AUTHORIZE_CLOSE] Button clicked by ${interaction.user.tag} in channel ${interaction.channelId}`);
 
         const customId = interaction.customId;
-        // Parse: authorize_close_{ticketNumber}_{userId}
+        
         const match = customId.match(/^authorize_close_(.+)_(\d+)$/);
 
         if (!match) {
@@ -1281,7 +1248,6 @@ export async function handleAuthorizeClose(interaction: ButtonInteraction): Prom
         const requestingUserId = match[2];
         console.log(`[AUTHORIZE_CLOSE] Parsed ticket #${ticketNumber}, requesting user: ${requestingUserId}`);
 
-        // Defer the update immediately to prevent timeout
         await interaction.deferUpdate();
 
         const db = getDatabase();
@@ -1307,7 +1273,6 @@ export async function handleAuthorizeClose(interaction: ButtonInteraction): Prom
 
         console.log(`[AUTHORIZE_CLOSE] Authorization granted by ${interaction.user.tag}`);
 
-        // Edit the original authorization message to show authorization granted
         const authorizedContainer = new ContainerBuilder();
         if (!(authorizedContainer as any).components) {
             (authorizedContainer as any).components = [];
@@ -1326,7 +1291,6 @@ export async function handleAuthorizeClose(interaction: ButtonInteraction): Prom
             flags: MessageFlags.IsComponentsV2
         });
 
-        // Continue with the normal closing process - just close the ticket directly
         setTimeout(async () => {
             try {
                 console.log(`[AUTHORIZE_CLOSE] Starting ticket closure process for ticket #${ticket.ticket_number}`);
@@ -1340,7 +1304,6 @@ export async function handleAuthorizeClose(interaction: ButtonInteraction): Prom
                     await db.closeTicket(ticket.ticket_number);
                     await botLogger.logTicketClosed(ticket.ticket_number, 'Ticket completed', ticket.user_id);
 
-                    // Send closing message and delete channel
                     await channel.send(`🔒 **This ticket has been closed and transcript saved.**\n⏰ **This channel will be deleted in 10 seconds.**`);
 
                     setTimeout(async () => {
@@ -1355,7 +1318,7 @@ export async function handleAuthorizeClose(interaction: ButtonInteraction): Prom
             } catch (error) {
                 console.error('[AUTHORIZE_CLOSE] Error in authorization close process:', error);
             }
-        }, 2000); // 2 second delay after authorization
+        }, 2000); 
     } catch (error) {
         console.error('[AUTHORIZE_CLOSE] Fatal error in handleAuthorizeClose:', error);
         try {
@@ -1381,7 +1344,7 @@ export async function handleDenyClose(interaction: ButtonInteraction): Promise<v
         console.log(`[DENY_CLOSE] Button clicked by ${interaction.user.tag} in channel ${interaction.channelId}`);
 
         const customId = interaction.customId;
-        // Parse: deny_close_{ticketNumber}_{userId}
+        
         const match = customId.match(/^deny_close_(.+)_(\d+)$/);
 
         if (!match) {
@@ -1397,7 +1360,6 @@ export async function handleDenyClose(interaction: ButtonInteraction): Promise<v
         const requestingUserId = match[2];
         console.log(`[DENY_CLOSE] Parsed ticket #${ticketNumber}, requesting user: ${requestingUserId}`);
 
-        // Defer the update immediately to prevent timeout
         await interaction.deferUpdate();
 
         const db = getDatabase();
@@ -1423,7 +1385,6 @@ export async function handleDenyClose(interaction: ButtonInteraction): Promise<v
 
         console.log(`[DENY_CLOSE] Closure request denied by ${interaction.user.tag}`);
 
-        // Edit the original authorization message to show "Request Denied"
         const deniedContainer = new ContainerBuilder();
         if (!(deniedContainer as any).components) {
             (deniedContainer as any).components = [];
@@ -1460,4 +1421,4 @@ export async function handleDenyClose(interaction: ButtonInteraction): Promise<v
         }
     }
 }
-
+

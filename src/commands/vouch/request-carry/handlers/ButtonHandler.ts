@@ -3,7 +3,6 @@ import { RequestCarryData, RequestCarryBuilder } from '../builders/RequestCarryB
 import { RequestCarryUtils } from '../utils/RequestCarryUtils';
 import { isInteractionValid, safeReply, safeUpdate } from '../../../../utils/interactionUtils';
 
-// Helper function to get client
 function getClient() {
     try {
         return require('../../../../index').client;
@@ -13,22 +12,14 @@ function getClient() {
     }
 }
 
-// Helper function to capitalize first letter
 function capitalizeFirstLetter(str: string): string {
     if (!str) return str;
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-/**
- * Handles all button interactions for the request-carry command
- * Following the new modular structure for better maintainability
- */
 export class RequestCarryButtonHandler {
     private static sessionData: Map<string, RequestCarryData> = new Map();
 
-    /**
-     * Main entry point for handling button interactions
-     */
     static async handle(interaction: ButtonInteraction): Promise<void> {
         if (!isInteractionValid(interaction)) {
             console.warn('Button interaction expired, cannot process');
@@ -38,7 +29,6 @@ export class RequestCarryButtonHandler {
         const customId = interaction.customId;
         const userId = this.extractUserIdFromCustomId(customId);
 
-        // Only validate user ID for request-carry form buttons, not for legacy ticket buttons
         const isLegacyTicketButton = customId === 'claim_ticket' || 
                                    customId === 'edit_ticket' || 
                                    customId === 'close_ticket' || 
@@ -49,7 +39,6 @@ export class RequestCarryButtonHandler {
 
         const isNewTicketButton = customId.includes('_claim_') || customId.includes('_unclaim_') || customId.includes('_close_');
 
-        // Verify the interaction is for the correct user (only for request-carry form buttons that have userId)
         if (!isLegacyTicketButton && !isNewTicketButton && userId && userId !== interaction.user.id) {
             await safeReply(interaction, {
                 content: "This interaction is not for you!",
@@ -59,7 +48,7 @@ export class RequestCarryButtonHandler {
         }
 
         try {
-            // Handle request-carry form buttons
+            
             if (customId.includes('_goal_')) {
                 await this.handleGoalButton(interaction, userId);
             } else if (customId.includes('_links_yes_')) {
@@ -71,7 +60,7 @@ export class RequestCarryButtonHandler {
             } else if (customId.includes('_cancel_')) {
                 await this.handleCancelButton(interaction, userId);
             } 
-            // Handle new ticket control buttons
+            
             else if (customId.includes('_claim_')) {
                 await this.handleTicketClaimButton(interaction);
             } else if (customId.includes('_unclaim_')) {
@@ -79,7 +68,7 @@ export class RequestCarryButtonHandler {
             } else if (customId.includes('_close_')) {
                 await this.handleTicketCloseButton(interaction);
             }
-            // Handle legacy ticket buttons
+            
             else if (customId === 'claim_ticket') {
                 await this.handleLegacyClaimTicket(interaction);
             } else if (customId === 'edit_ticket') {
@@ -91,7 +80,7 @@ export class RequestCarryButtonHandler {
             } else if (customId === 'unclaim_ticket') {
                 await this.handleLegacyUnclaimTicket(interaction);
             }
-            // Handle legacy support ticket form buttons
+            
             else if (customId.startsWith('ticket_')) {
                 await this.handleLegacySupportTicketButtons(interaction);
             }
@@ -101,19 +90,13 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle goal setting button
-     */
     private static async handleGoalButton(interaction: ButtonInteraction, userId: string): Promise<void> {
         const modal = this.createGoalModal(userId);
         await interaction.showModal(modal);
     }
 
-    /**
-     * Handle "can join links" button
-     */
     private static async handleLinksYesButton(interaction: ButtonInteraction, userId: string): Promise<void> {
-        // Sync with current message state first
+        
         await this.syncWithCurrentState(interaction, userId);
         
         const data = this.getSessionData(userId);
@@ -123,11 +106,8 @@ export class RequestCarryButtonHandler {
         await this.updateInterfaceCompatible(interaction, userId, data);
     }
 
-    /**
-     * Handle "cannot join links" button
-     */
     private static async handleLinksNoButton(interaction: ButtonInteraction, userId: string): Promise<void> {
-        // Sync with current message state first
+        
         await this.syncWithCurrentState(interaction, userId);
         
         const data = this.getSessionData(userId);
@@ -137,13 +117,9 @@ export class RequestCarryButtonHandler {
         await this.updateInterfaceCompatible(interaction, userId, data);
     }
 
-    /**
-     * Handle form submission
-     */
     private static async handleSubmitButton(interaction: ButtonInteraction, userId: string): Promise<void> {
         const data = this.getSessionData(userId);
 
-        // Validate form completion
         if (!RequestCarryUtils.isFormComplete(data)) {
             await safeReply(interaction, {
                 content: "Please complete all required fields before submitting.",
@@ -152,7 +128,6 @@ export class RequestCarryButtonHandler {
             return;
         }
 
-        // Check message requirement for regular carries
         if (data.type === 'regular') {
             try {
                 const Database = (await import('../../../../database/database')).default;
@@ -184,7 +159,7 @@ export class RequestCarryButtonHandler {
         }
 
         try {
-            // Create the ticket
+            
             const ticketChannelId = await RequestCarryUtils.createTicket(
                 interaction.guild!,
                 data,
@@ -192,7 +167,6 @@ export class RequestCarryButtonHandler {
                 interaction.user.tag
             );
 
-            // Success response - update with success message using Components V2
             const successContainer = new ContainerBuilder();
             if (!(successContainer as any).components) {
                 (successContainer as any).components = [];
@@ -207,7 +181,6 @@ export class RequestCarryButtonHandler {
                 flags: MessageFlags.IsComponentsV2
             });
 
-            // Clean up session data
             this.clearSessionData(userId);
 
         } catch (error) {
@@ -219,11 +192,8 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle form cancellation
-     */
     private static async handleCancelButton(interaction: ButtonInteraction, userId: string): Promise<void> {
-        // Cancel response using Components V2
+        
         const cancelContainer = new ContainerBuilder();
         if (!(cancelContainer as any).components) {
             (cancelContainer as any).components = [];
@@ -241,17 +211,11 @@ export class RequestCarryButtonHandler {
         this.clearSessionData(userId);
     }
 
-    /**
-     * Update the interface with new data using the compatible system
-     */
     private static async updateInterfaceCompatible(interaction: ButtonInteraction, userId: string, data: RequestCarryData): Promise<void> {
-        // Use the new builder directly
+        
         await this.updateInterface(interaction, userId, data);
     }
 
-    /**
-     * Update the interface with new data (original method for new builder)
-     */
     private static async updateInterface(interaction: ButtonInteraction, userId: string, data: RequestCarryData): Promise<void> {
         const builder = new RequestCarryBuilder(data, userId, true);
         const response = builder.build();
@@ -262,24 +226,18 @@ export class RequestCarryButtonHandler {
         });
     }
 
-    /**
-     * Sync session data with current message state
-     */
     private static async syncWithCurrentState(interaction: ButtonInteraction, userId: string): Promise<void> {
         try {
             const currentData = this.getSessionData(userId);
             
-            // Parse current state from message components (similar to what we did in modal handler)
             const fullContent = JSON.stringify(interaction.message?.components || {});
             
-            // Parse game from display text
             if (fullContent.includes('Anime Last Stand') && !currentData.game) {
                 currentData.game = 'als';
             } else if (fullContent.includes('Anime Vanguard') && !currentData.game) {
                 currentData.game = 'av';
             }
             
-            // Try to parse gamemode - look for common gamemode values
             if (!currentData.gamemode) {
                 const gamemodes = ['story', 'legend-stages', 'raids', 'dungeons', 'survival', 'breach', 'portals', 'rift', 'inf', 'sjw-dungeon', 'void', 'towers', 'events'];
                 for (const gamemode of gamemodes) {
@@ -290,7 +248,6 @@ export class RequestCarryButtonHandler {
                 }
             }
             
-            // Try to parse existing goal
             if (!currentData.goal) {
                 const goalMatch = fullContent.match(/Goal Description.*?\[SET\].*?"([^"]+)"/);
                 if (goalMatch && goalMatch[1]) {
@@ -342,14 +299,11 @@ export class RequestCarryButtonHandler {
         this.sessionData.delete(userId);
     }
 
-    /**
-     * Utility methods
-     */
     private static extractUserIdFromCustomId(customId: string): string {
         const parts = customId.split('_');
-        // Find the user ID part (typically after the action part)
+        
         for (let i = 0; i < parts.length; i++) {
-            if (parts[i].match(/^\d{17,19}$/)) { // Discord user ID pattern
+            if (parts[i].match(/^\d{17,19}$/)) { 
                 return parts[i];
             }
         }
@@ -379,7 +333,7 @@ export class RequestCarryButtonHandler {
             await db.connect();
             
             try {
-                // Check if ticket exists and is not already claimed
+                
                 console.log(`[TICKET_CLAIM] Looking up ticket number: ${ticketNumber}`);
                 const ticket = await db.getTicket(ticketNumber);
                 console.log(`[TICKET_CLAIM] Database result:`, ticket);
@@ -392,7 +346,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Check if user has permission for this game
                 const hasPermission = await this.hasGameHelperPermission(interaction, ticket.game);
                 if (!hasPermission) {
                     await safeReply(interaction, {
@@ -410,7 +363,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
                 
-                // Claim the ticket
                 await db.claimTicket(ticketNumber, interaction.user.id, interaction.user.tag);
 
                 console.log(`[CLAIM_DEBUG] Ticket #${ticketNumber} claimed by ${interaction.user.tag} (${interaction.user.id})`);
@@ -421,14 +373,13 @@ export class RequestCarryButtonHandler {
                 });
 
                 console.log(`[CLAIM_DEBUG] Updating ticket message to show claimed status for #${ticketNumber}`);
-                // Update the ticket message to show claimed status
+                
                 await this.updateNewTicketMessage(interaction, ticket, 'claimed', interaction.user);
 
                 console.log(`[CLAIM_DEBUG] Updating control buttons to show unclaim button for #${ticketNumber}`);
-                // Update the control buttons to show unclaim instead of claim
+                
                 await this.updateTicketControlButtons(interaction, ticketNumber, 'claimed');
 
-                // Notify in the channel
                 await interaction.followUp({
                     content: `🤝 **Ticket claimed by <@${interaction.user.id}>**\n\nThe helper will assist you shortly.`
                 });
@@ -445,9 +396,6 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle ticket unclaim button
-     */
     private static async handleTicketUnclaimButton(interaction: ButtonInteraction): Promise<void> {
         const ticketNumber = this.extractTicketNumberFromCustomId(interaction.customId);
         
@@ -457,7 +405,7 @@ export class RequestCarryButtonHandler {
             await db.connect();
             
             try {
-                // Check if ticket exists and is claimed by this user
+                
                 const ticket = await db.getTicket(ticketNumber);
                 if (!ticket) {
                     await safeReply(interaction, {
@@ -467,7 +415,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Check if user has permission for this game
                 const hasPermission = await this.hasGameHelperPermission(interaction, ticket.game);
                 if (!hasPermission) {
                     await safeReply(interaction, {
@@ -493,7 +440,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
                 
-                // Unclaim the ticket
                 await db.unclaimTicket(ticketNumber);
 
                 console.log(`[UNCLAIM_DEBUG] Ticket #${ticketNumber} unclaimed from database`);
@@ -504,14 +450,13 @@ export class RequestCarryButtonHandler {
                 });
 
                 console.log(`[UNCLAIM_DEBUG] Updating ticket message to show open status for #${ticketNumber}`);
-                // Update the ticket message to show open status
+                
                 await this.updateNewTicketMessage(interaction, ticket, 'open');
 
                 console.log(`[UNCLAIM_DEBUG] Updating control buttons to show claim button for #${ticketNumber}`);
-                // Update the control buttons to show claim instead of unclaim
+                
                 await this.updateTicketControlButtons(interaction, ticketNumber, 'open');
 
-                // Notify in the channel
                 await interaction.followUp({
                     content: `🔄 **Ticket unclaimed**\n\nThis ticket is now available for other helpers to claim.`
                 });
@@ -528,9 +473,6 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle ticket close button
-     */
     private static async handleTicketCloseButton(interaction: ButtonInteraction): Promise<void> {
         const ticketNumber = this.extractTicketNumberFromCustomId(interaction.customId);
         
@@ -540,7 +482,7 @@ export class RequestCarryButtonHandler {
             await db.connect();
             
             try {
-                // Check if ticket exists
+                
                 const ticket = await db.getTicket(ticketNumber);
                 if (!ticket) {
                     await safeReply(interaction, {
@@ -558,10 +500,8 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Check if user has permission for this game
                 const hasGamePermission = await this.hasGameHelperPermission(interaction, ticket.game);
                 
-                // Check if user has permission to close (ticket owner, claimed helper, or game helper)
                 const canClose = ticket.user_id === interaction.user.id || 
                                ticket.claimed_by === interaction.user.id ||
                                hasGamePermission ||
@@ -575,7 +515,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
                 
-                // Close the ticket in database
                 await db.closeTicket(ticketNumber);
 
                 await safeReply(interaction, {
@@ -583,7 +522,6 @@ export class RequestCarryButtonHandler {
                     ephemeral: true
                 });
 
-                // Start the ticket closure workflow (transcript + review + cleanup)
                 await this.initiateTicketClosureWorkflow(interaction, ticket, interaction.user);
                 
             } finally {
@@ -598,12 +536,9 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Extract ticket number from custom ID
-     */
     private static extractTicketNumberFromCustomId(customId: string): string {
         const parts = customId.split('_');
-        // Find the numeric part that represents the ticket number
+        
         for (const part of parts) {
             if (/^\d+$/.test(part)) {
                 return part;
@@ -640,7 +575,6 @@ export class RequestCarryButtonHandler {
                 hasRole = member.roles.includes(helperRoleId);
             }
             
-            // Also check for admin permissions as fallback
             const hasManageChannels = interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
             
             return hasRole || hasManageChannels || false;
@@ -650,31 +584,24 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Update ticket control buttons based on new status
-     */
     private static async updateTicketControlButtons(interaction: ButtonInteraction, ticketNumber: string, newStatus: 'open' | 'claimed' | 'closed'): Promise<void> {
         try {
             const { RequestCarryUtils } = await import('../utils/RequestCarryUtils');
 
-            // Create new buttons based on status
             const newButtons = RequestCarryUtils.createTicketControlButtons(parseInt(ticketNumber), newStatus);
 
             console.log(`[BUTTON_DEBUG] Created ${newButtons.length} buttons for ticket #${ticketNumber} with status ${newStatus}`);
 
-            // Validate that we have buttons before creating the row
             if (newButtons.length === 0) {
                 console.error(`[BUTTON_DEBUG] No buttons generated for ticket #${ticketNumber} with status ${newStatus}`);
                 return;
             }
 
-            // Create new container with updated buttons
             const controlContainer = new ContainerBuilder();
             if (!(controlContainer as any).components) {
                 (controlContainer as any).components = [];
             }
 
-            // Add button row to container (no text, just buttons)
             try {
                 const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(newButtons);
                 (controlContainer as any).components.push(buttonRow);
@@ -684,14 +611,12 @@ export class RequestCarryButtonHandler {
                 return;
             }
 
-            // Find the control message in the channel (it should be the second message)
             const channel = interaction.channel;
             if (channel && 'messages' in channel) {
                 const messages = await channel.messages.fetch({ limit: 10 });
                 const controlMessage = messages.find(msg => {
                     if (!msg.components || msg.components.length === 0) return false;
 
-                    // Look for messages with Components V2 flag that contain ticket control buttons
                     if (!msg.flags?.has(MessageFlags.IsComponentsV2)) return false;
 
                     for (const component of msg.components) {
@@ -720,7 +645,6 @@ export class RequestCarryButtonHandler {
                 } else {
                     console.warn(`[UNCLAIM_DEBUG] Could not find control message to update for ticket #${ticketNumber}`);
 
-                    // Log available messages for debugging
                     console.log(`[UNCLAIM_DEBUG] Available messages in channel:`);
                     messages.forEach((msg, index) => {
                         console.log(`  Message ${index}: hasComponents=${!!msg.components?.length}, isV2=${!!msg.flags?.has(MessageFlags.IsComponentsV2)}, author=${msg.author.tag}`);
@@ -732,9 +656,6 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle legacy claim ticket button (claim_ticket)
-     */
     private static async handleLegacyClaimTicket(interaction: ButtonInteraction): Promise<void> {
         try {
             const Database = (await import('../../../../database/database')).default;
@@ -742,7 +663,7 @@ export class RequestCarryButtonHandler {
             await db.connect();
             
             try {
-                // Get ticket by channel ID for legacy tickets
+                
                 const ticket = await db.getTicketByChannelId(interaction.channelId);
                 
                 if (!ticket) {
@@ -753,7 +674,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Check game-specific permissions if ticket has game info
                 if (ticket.game) {
                     const hasPermission = await this.hasGameHelperPermission(interaction, ticket.game);
                     if (!hasPermission) {
@@ -781,10 +701,8 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Claim the ticket
                 await db.claimTicket(ticket.ticket_number, interaction.user.id, interaction.user.tag);
 
-                // Update the message to show claimed status
                 await this.updateLegacyTicketMessage(interaction, ticket, 'claimed');
 
                 await safeReply(interaction, {
@@ -792,7 +710,6 @@ export class RequestCarryButtonHandler {
                     ephemeral: true
                 });
 
-                // Send public notification
                 await interaction.followUp({
                     content: `🤝 **This ticket has been claimed by ${interaction.user}**\n\nThey will be assisting you with your request.`
                 });
@@ -806,9 +723,6 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle legacy edit ticket button (edit_ticket)
-     */
     private static async handleLegacyEditTicket(interaction: ButtonInteraction): Promise<void> {
         try {
             const Database = (await import('../../../../database/database')).default;
@@ -845,7 +759,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Show edit modal
                 await this.showEditTicketModal(interaction, ticket);
 
             } finally {
@@ -857,9 +770,6 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle legacy close ticket button (close_ticket)
-     */
     private static async handleLegacyCloseTicket(interaction: ButtonInteraction): Promise<void> {
         try {
             const Database = (await import('../../../../database/database')).default;
@@ -885,7 +795,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Check permissions
                 const isOwner = ticket.user_id === interaction.user.id;
                 const isClaimer = ticket.claimed_by === interaction.user.id;
                 const hasGamePermission = ticket.game ? await this.hasGameHelperPermission(interaction, ticket.game) : false;
@@ -901,7 +810,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Close the ticket
                 await db.closeTicket(ticket.ticket_number);
 
                 await safeReply(interaction, {
@@ -909,7 +817,6 @@ export class RequestCarryButtonHandler {
                     ephemeral: true
                 });
 
-                // Start the ticket closure workflow (transcript + review + cleanup)
                 await this.initiateTicketClosureWorkflow(interaction, ticket, interaction.user);
 
             } finally {
@@ -921,9 +828,6 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle legacy unclaim ticket button (unclaim_ticket)
-     */
     private static async handleLegacyUnclaimTicket(interaction: ButtonInteraction): Promise<void> {
         try {
             const Database = (await import('../../../../database/database')).default;
@@ -957,7 +861,6 @@ export class RequestCarryButtonHandler {
                     return;
                 }
 
-                // Unclaim the ticket
                 await db.unclaimTicket(ticket.ticket_number);
 
                 await safeReply(interaction, {
@@ -965,7 +868,6 @@ export class RequestCarryButtonHandler {
                     ephemeral: true
                 });
 
-                // Update message to show open status
                 await this.updateLegacyTicketMessage(interaction, ticket, 'open');
 
             } finally {
@@ -977,9 +879,6 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Handle legacy ring helper button (ring_helper)
-     */
     private static async handleLegacyRingHelper(interaction: ButtonInteraction): Promise<void> {
         await safeReply(interaction, {
             content: "🔔 **Helper ping feature is currently disabled.**\n\nPlease wait for a helper to respond or contact staff if urgent.",
@@ -987,9 +886,6 @@ export class RequestCarryButtonHandler {
         });
     }
 
-    /**
-     * Handle legacy support ticket form buttons (ticket_category, ticket_subject, etc.)
-     */
     private static async handleLegacySupportTicketButtons(interaction: ButtonInteraction): Promise<void> {
         await safeReply(interaction, {
             content: "🔄 **Legacy ticket system is being updated.**\n\nPlease use the new `/request-carry` command for carry requests, or contact staff for other support needs.",
@@ -997,9 +893,6 @@ export class RequestCarryButtonHandler {
         });
     }
 
-    /**
-     * Show edit ticket modal for legacy tickets
-     */
     private static async showEditTicketModal(interaction: ButtonInteraction, ticket: any): Promise<void> {
         const modal = new ModalBuilder()
             .setCustomId(`edit_ticket_modal_${ticket.ticket_number}`)
@@ -1048,29 +941,24 @@ export class RequestCarryButtonHandler {
 
             if (!originalEmbed) return;
 
-            // Create updated embed
             const updatedEmbed = new EmbedBuilder()
                 .setTitle(originalEmbed.title || `🎫 Ticket #${ticket.ticket_number}`)
                 .setColor(newStatus === 'open' ? 0xffff00 : newStatus === 'claimed' ? 0x00ff00 : 0x808080)
                 .setTimestamp();
 
-            // Update description with new status
             const statusEmoji = newStatus === 'open' ? '🟡' : newStatus === 'claimed' ? '🟢' : '🔒';
             const statusText = newStatus === 'open' ? 'Open' : newStatus === 'claimed' ? 'Claimed' : 'Closed';
             
             updatedEmbed.setDescription(`**Ticket ID:** \`#${ticket.ticket_number}\`\n**Status:** ${statusEmoji} ${statusText}`);
 
-            // Add fields from original embed and update claimed by field
             if (originalEmbed.fields) {
                 const fields = [...originalEmbed.fields];
                 
-                // Remove old claimed by field if exists
                 const claimedIndex = fields.findIndex(f => f.name.includes('Claimed by'));
                 if (claimedIndex !== -1) {
                     fields.splice(claimedIndex, 1);
                 }
 
-                // Add claimed by field if ticket is claimed
                 if (newStatus === 'claimed') {
                     fields.push({
                         name: "🤝 **Claimed by**",
@@ -1082,7 +970,6 @@ export class RequestCarryButtonHandler {
                 updatedEmbed.addFields(fields);
             }
 
-            // Create updated buttons based on status
             const buttons: ButtonBuilder[] = [];
             
             if (newStatus === 'open') {
@@ -1130,22 +1017,17 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Update new ticket message (Components V2) with status changes
-     */
     private static async updateNewTicketMessage(interaction: ButtonInteraction, ticket: any, newStatus: 'open' | 'claimed' | 'closed', claimedBy?: any): Promise<void> {
         try {
             const channel = interaction.channel;
             if (!channel || !('messages' in channel)) return;
 
-            // Find the ticket information message (Components V2 message that doesn't have buttons)
             const messages = await channel.messages.fetch({ limit: 10 });
             const ticketMessage = messages.find(msg => {
-                // Look for Components V2 message with ticket header
+                
                 if (!msg.flags?.has(MessageFlags.IsComponentsV2)) return false;
                 if (!msg.components || msg.components.length === 0) return false;
 
-                // Check if this is the ticket info message (not the buttons message)
                 const hasTicketButtons = msg.components.some((component: any) =>
                     component.components &&
                     component.components.some((comp: any) =>
@@ -1157,13 +1039,12 @@ export class RequestCarryButtonHandler {
                     )
                 );
 
-                return !hasTicketButtons; // Return the message that doesn't have buttons
+                return !hasTicketButtons; 
             });
 
             if (!ticketMessage) {
                 console.warn(`[UPDATE_MESSAGE_DEBUG] Could not find ticket message to update for ticket #${ticket.ticket_number}`);
 
-                // Log available messages for debugging
                 console.log(`[UPDATE_MESSAGE_DEBUG] Available messages in channel:`);
                 messages.forEach((msg, index) => {
                     const hasComponents = !!msg.components?.length;
@@ -1181,10 +1062,8 @@ export class RequestCarryButtonHandler {
 
             console.log(`[UPDATE_MESSAGE_DEBUG] Found ticket message for #${ticket.ticket_number}, updating to status: ${newStatus}`);
 
-            // Create updated ticket container
             const ticketContainer = new ContainerBuilder();
 
-            // Add header with status
             const statusEmoji = newStatus === 'open' ? '🟡' : newStatus === 'claimed' ? '🟢' : '🔒';
             const statusText = newStatus === 'open' ? 'Open' : newStatus === 'claimed' ? 'Claimed' : 'Closed';
 
@@ -1200,7 +1079,6 @@ export class RequestCarryButtonHandler {
             const headerSection = new TextDisplayBuilder()
                 .setContent(headerContent);
             
-            // Add all the ticket information in a details section
             const detailsContent = [
                 `**🎮 Game:** ${ticket.game ? ticket.game.toUpperCase() : 'Unknown'}`,
                 `**🎯 Gamemode:** ${capitalizeFirstLetter(ticket.gamemode || 'Not specified')}`,
@@ -1220,7 +1098,6 @@ export class RequestCarryButtonHandler {
             const detailsSection = new TextDisplayBuilder()
                 .setContent(detailsContent.join('\n'));
             
-            // Add components to container using the proper method
             if (!(ticketContainer as any).components) {
                 (ticketContainer as any).components = [];
             }
@@ -1239,33 +1116,27 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Initiate the complete ticket closure workflow
-     */
     private static async initiateTicketClosureWorkflow(interaction: ButtonInteraction, ticket: any, closedBy: any): Promise<void> {
         try {
-            // Notify in the channel first
+            
             await interaction.followUp({
                 content: `🔒 **Ticket closed by <@${closedBy.id}>**\n\nGenerating transcript and preparing review system...`
             });
 
-            // Generate transcript
             const transcriptBuffer = await this.generateTranscript(interaction, ticket, closedBy);
             
-            // Send transcript to appropriate channel
             await this.sendTranscriptToChannel(interaction, ticket, transcriptBuffer, closedBy);
             
-            // If ticket was claimed, show review system to ticket creator
             if (ticket.claimed_by && ticket.user_id !== closedBy.id) {
                 await this.showReviewSystem(interaction, ticket);
             } else {
-                // If no review needed, finalize closure immediately
+                
                 await this.finalizeTicketClosure(interaction, ticket, transcriptBuffer);
             }
 
         } catch (error) {
             console.error('Error in ticket closure workflow:', error);
-            // Fallback - just archive the channel
+            
             setTimeout(async () => {
                 try {
                     const channel = interaction.channel;
@@ -1279,9 +1150,6 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Generate transcript of the ticket conversation
-     */
     private static async generateTranscript(interaction: ButtonInteraction, ticket: any, closedBy: any): Promise<Buffer> {
         try {
             const channel = interaction.channel;
@@ -1289,11 +1157,9 @@ export class RequestCarryButtonHandler {
                 throw new Error('Cannot fetch messages from this channel');
             }
 
-            // Fetch all messages in the channel
             const messages = await channel.messages.fetch({ limit: 100 });
             const sortedMessages = Array.from(messages.values()).sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
-            // Format transcript
             const lines: string[] = [];
             
             lines.push('='.repeat(80));
@@ -1392,7 +1258,6 @@ export class RequestCarryButtonHandler {
                 return;
             }
 
-            // Create embed for transcript post
             const transcriptEmbed = new EmbedBuilder()
                 .setTitle(`📄 Ticket Transcript #${ticket.ticket_number}`)
                 .setColor(type === 'paid' ? 0x00d4aa : 0x5865f2)
@@ -1424,12 +1289,9 @@ export class RequestCarryButtonHandler {
         }
     }
 
-    /**
-     * Show review system to ticket creator
-     */
     private static async showReviewSystem(interaction: ButtonInteraction, ticket: any): Promise<void> {
         try {
-            // Create review buttons (1-5 stars)
+            
             const reviewButtons: ButtonBuilder[] = [];
             for (let i = 1; i <= 5; i++) {
                 reviewButtons.push(
@@ -1441,7 +1303,6 @@ export class RequestCarryButtonHandler {
                 );
             }
 
-            // Add skip review button
             reviewButtons.push(
                 new ButtonBuilder()
                     .setCustomId(`close_skip_review_${ticket.ticket_number}`)
@@ -1450,7 +1311,6 @@ export class RequestCarryButtonHandler {
                     .setEmoji('⏭️')
             );
 
-            // Split buttons into two rows if needed
             const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(reviewButtons.slice(0, 3));
             const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(reviewButtons.slice(3));
 
@@ -1469,20 +1329,16 @@ export class RequestCarryButtonHandler {
 
         } catch (error) {
             console.error('Error showing review system:', error);
-            // If review system fails, finalize closure
+            
             await this.finalizeTicketClosure(interaction, ticket);
         }
     }
 
-    /**
-     * Finalize ticket closure (send DM, delete channel)
-     */
     private static async finalizeTicketClosure(interaction: ButtonInteraction, ticket: any, transcriptBuffer?: Buffer): Promise<void> {
         try {
-            // Send confirmation DM to ticket creator
+            
             await this.sendClosureConfirmationDM(interaction, ticket, transcriptBuffer);
 
-            // Delete the channel after delay
             setTimeout(async () => {
                 try {
                     const channel = interaction.channel;
@@ -1493,16 +1349,13 @@ export class RequestCarryButtonHandler {
                 } catch (deleteError) {
                     console.error(` Error deleting ticket channel for ticket #${ticket.ticket_number}:`, deleteError);
                 }
-            }, 10000); // 10 second delay
+            }, 10000); 
 
         } catch (error) {
             console.error('Error finalizing ticket closure:', error);
         }
     }
 
-    /**
-     * Send closure confirmation DM to ticket creator
-     */
     private static async sendClosureConfirmationDM(interaction: ButtonInteraction, ticket: any, transcriptBuffer?: Buffer): Promise<void> {
         try {
             const ticketOpener = await interaction.client.users.fetch(ticket.user_id);

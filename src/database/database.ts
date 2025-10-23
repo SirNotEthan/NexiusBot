@@ -476,11 +476,10 @@ class DatabaseManager extends EventEmitter {
 
     private async migrateVouchesTableConstraints(): Promise<void> {
         try {
-            // Check if the vouches table has the old foreign key constraint on ticket_id
+            
             const tableInfo = this.db!.pragma('table_info(vouches)') as Array<any>;
             const foreignKeys = this.db!.pragma('foreign_key_list(vouches)') as Array<any>;
 
-            // Check if ticket_id has a foreign key constraint to tickets
             const hasTicketForeignKey = foreignKeys.some((fk: any) =>
                 fk.from === 'ticket_id' && fk.table === 'tickets'
             );
@@ -489,7 +488,7 @@ class DatabaseManager extends EventEmitter {
                 console.log('🔄 Migrating vouches table to remove ticket_id foreign key constraint...');
 
                 this.db!.transaction(() => {
-                    // Create new table with updated schema
+                    
                     this.db!.exec(`
                         CREATE TABLE vouches_new (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -507,19 +506,15 @@ class DatabaseManager extends EventEmitter {
                         )
                     `);
 
-                    // Copy data from old table to new table
                     this.db!.exec(`
                         INSERT INTO vouches_new
                         SELECT * FROM vouches
                     `);
 
-                    // Drop old table
                     this.db!.exec('DROP TABLE vouches');
 
-                    // Rename new table to original name
                     this.db!.exec('ALTER TABLE vouches_new RENAME TO vouches');
 
-                    // Recreate indexes
                     this.db!.exec('CREATE INDEX IF NOT EXISTS idx_vouches_helper_id ON vouches(helper_id)');
                     this.db!.exec('CREATE INDEX IF NOT EXISTS idx_vouches_user_id ON vouches(user_id)');
                 })();
@@ -568,10 +563,6 @@ class DatabaseManager extends EventEmitter {
         }
     }
 
-    /**
-     * Atomically create a ticket with auto-generated ticket number
-     * This prevents race conditions that can cause UNIQUE constraint failures
-     */
     async createTicketWithAutoNumber(ticket: Omit<TicketRecord, 'id' | 'created_at' | 'updated_at' | 'ticket_number'>): Promise<{ ticketId: number; ticketNumber: string }> {
         if (!this.isConnected) throw new Error('Database not connected');
 
@@ -581,14 +572,12 @@ class DatabaseManager extends EventEmitter {
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                // Use a more robust transaction approach
+                
                 const result = this.db!.transaction(() => {
                     let nextTicketNumber: string;
 
                     console.log(`[ATOMIC_TICKET_CREATE] Attempt ${attempt} for game ${ticket.game}`);
 
-                    // First, check what the highest existing ticket number is for this game
-                    // Handle both old format (numeric only) and new format (GAME-N)
                     const gamePrefixUpper = ticket.game?.toUpperCase() || 'TICKET';
                     const maxTicketQuery = `
                         SELECT
@@ -607,8 +596,6 @@ class DatabaseManager extends EventEmitter {
 
                     console.log(`[ATOMIC_TICKET_CREATE] Current max ticket number for ${ticket.game}: ${currentMaxTicket}`);
 
-                    // Atomically get and increment the counter, ensuring it's at least currentMaxTicket + 1
-                    // This single query does both sync and increment in one operation
                     const getAndIncrementQuery = `
                         INSERT INTO ticket_counters (game, counter, created_at, updated_at)
                         VALUES (?, ?, ?, ?)
@@ -627,11 +614,9 @@ class DatabaseManager extends EventEmitter {
                         now
                     ]) as { counter: number };
 
-                    // Use game-prefixed ticket number to ensure uniqueness across games
                     nextTicketNumber = `${gamePrefixUpper}-${counterResult.counter}`;
                     console.log(`[ATOMIC_TICKET_CREATE] Generated ticket number ${nextTicketNumber} for game ${ticket.game}`);
 
-                    // Now create the ticket with the atomically generated number
                     const createTicketQuery = this.preparedStatements.get('createTicket');
                     console.log(`[ATOMIC_TICKET_CREATE] Attempting to create ticket with number ${nextTicketNumber}`);
 
@@ -679,7 +664,7 @@ class DatabaseManager extends EventEmitter {
 
                 if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' && attempt < maxRetries) {
                     console.warn(`[ATOMIC_TICKET_CREATE] Ticket number collision on attempt ${attempt}, retrying...`);
-                    // Exponential backoff with jitter
+                    
                     const baseDelay = Math.min(100 * Math.pow(2, attempt - 1), 1000);
                     const jitter = Math.random() * 50;
                     await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
@@ -695,10 +680,6 @@ class DatabaseManager extends EventEmitter {
         throw lastError || new Error('Failed to create ticket after multiple attempts');
     }
 
-    /**
-     * Manually sync ticket counters with the actual max ticket numbers in the database
-     * Call this if there are persistent counter issues
-     */
     async syncTicketCounters(): Promise<void> {
         if (!this.isConnected) throw new Error('Database not connected');
 
@@ -706,12 +687,11 @@ class DatabaseManager extends EventEmitter {
 
         const now = Date.now();
 
-        // Get all games that have tickets
         const gamesQuery = 'SELECT DISTINCT game FROM tickets WHERE game IS NOT NULL';
         const games = this.db!.prepare(gamesQuery).all() as { game: string }[];
 
         for (const { game } of games) {
-            // Find the highest ticket number for this game
+            
             const maxTicketQuery = `
                 SELECT CAST(ticket_number AS INTEGER) as max_ticket_num
                 FROM tickets
@@ -722,7 +702,6 @@ class DatabaseManager extends EventEmitter {
             const maxTicketResult = this.db!.prepare(maxTicketQuery).get([game]) as { max_ticket_num: number } | undefined;
             const maxTicket = maxTicketResult ? maxTicketResult.max_ticket_num : 0;
 
-            // Update the counter to be at least maxTicket + 1
             const syncQuery = `
                 INSERT INTO ticket_counters (game, counter, created_at, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -1348,7 +1327,7 @@ class DatabaseManager extends EventEmitter {
         const now = Date.now();
 
         try {
-            // Pure atomic operation - no separate checks
+            
             const query = `
                 INSERT INTO free_carry_usage (user_id, user_tag, game, gamemode, date, usage_count, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, 1, ?, ?)
@@ -1408,7 +1387,6 @@ class DatabaseManager extends EventEmitter {
                 return { eligible: false, reason: 'This gamemode does not support free carries' };
             }
             
-            // Atomically try to reserve a slot
             const reserveResult = await this.tryIncrementFreeCarryUsage(userId, userTag, game, gamemode, gamemodeLimit);
             
             if (!reserveResult.success) {
@@ -1623,7 +1601,6 @@ class DatabaseManager extends EventEmitter {
         try {
             console.log('🔄 Resetting all game ticket counters to 0...');
 
-            // Reset ALS counter to 0
             const alsQuery = `
                 INSERT INTO ticket_counters (game, counter, created_at, updated_at)
                 VALUES ('als', 0, ?, ?)
@@ -1634,7 +1611,6 @@ class DatabaseManager extends EventEmitter {
             this.db!.prepare(alsQuery).run([now, now, now]);
             console.log('✅ ALS ticket counter reset to 0');
 
-            // Reset AV counter to 0
             const avQuery = `
                 INSERT INTO ticket_counters (game, counter, created_at, updated_at)
                 VALUES ('av', 0, ?, ?)
@@ -1659,7 +1635,6 @@ class DatabaseManager extends EventEmitter {
         await this.connect();
     }
 
-    // Middleman Methods
     async createMiddlemanRequest(data: {
         ticket_number: string;
         user_id: string;

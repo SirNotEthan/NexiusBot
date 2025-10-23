@@ -3,15 +3,8 @@ import { RequestCarryData, RequestCarryBuilder } from '../builders/RequestCarryB
 import { RequestCarryButtonHandler } from './ButtonHandler';
 import { isInteractionValid, safeUpdate } from '../../../../utils/interactionUtils';
 
-/**
- * Handles select menu interactions for the request-carry command
- * Manages dropdown selections for games, gamemodes, and other options
- */
 export class RequestCarrySelectMenuHandler {
     
-    /**
-     * Main entry point for handling select menu interactions
-     */
     static async handle(interaction: StringSelectMenuInteraction): Promise<void> {
         if (!isInteractionValid(interaction)) {
             console.warn('Select menu interaction expired, cannot process');
@@ -21,7 +14,6 @@ export class RequestCarrySelectMenuHandler {
         const customId = interaction.customId;
         const userId = this.extractUserIdFromCustomId(customId);
 
-        // Verify the interaction is for the correct user
         if (userId !== interaction.user.id) {
             await interaction.reply({
                 content: "This selection is not for you!",
@@ -44,9 +36,6 @@ export class RequestCarrySelectMenuHandler {
         }
     }
 
-    /**
-     * Handle gamemode selection
-     */
     private static async handleGamemodeSelection(interaction: StringSelectMenuInteraction, userId: string): Promise<void> {
         const selectedGamemode = interaction.values[0];
         
@@ -58,10 +47,8 @@ export class RequestCarrySelectMenuHandler {
             return;
         }
 
-        // Sync with current state first
         await this.syncWithCurrentState(interaction, userId);
 
-        // Validate gamemode for the selected game
         const data = RequestCarryButtonHandler.getSessionData(userId);
         if (!data.game || !this.isValidGamemode(data.game, selectedGamemode)) {
             await interaction.reply({
@@ -72,11 +59,10 @@ export class RequestCarrySelectMenuHandler {
         }
 
         try {
-            // Update session data
+            
             data.gamemode = selectedGamemode;
             RequestCarryButtonHandler.setSessionData(userId, data);
 
-            // Update the interface
             await this.updateInterface(interaction, userId, data);
 
         } catch (error) {
@@ -88,9 +74,6 @@ export class RequestCarrySelectMenuHandler {
         }
     }
 
-    /**
-     * Handle game selection (for initial setup)
-     */
     private static async handleGameSelection(interaction: StringSelectMenuInteraction, userId: string): Promise<void> {
         const selectedGame = interaction.values[0];
         
@@ -103,14 +86,13 @@ export class RequestCarrySelectMenuHandler {
         }
 
         try {
-            // Update session data
+            
             const data = RequestCarryButtonHandler.getSessionData(userId);
             data.game = selectedGame;
-            // Reset gamemode when game changes
+            
             data.gamemode = undefined;
             RequestCarryButtonHandler.setSessionData(userId, data);
 
-            // Update the interface
             await this.updateInterface(interaction, userId, data);
 
         } catch (error) {
@@ -122,9 +104,6 @@ export class RequestCarrySelectMenuHandler {
         }
     }
 
-    /**
-     * Handle helper selection (for paid carries)
-     */
     private static async handleHelperSelection(interaction: StringSelectMenuInteraction, userId: string): Promise<void> {
         const selectedHelper = interaction.values[0];
         
@@ -137,7 +116,7 @@ export class RequestCarrySelectMenuHandler {
         }
 
         try {
-            // Verify helper is still available
+            
             const isAvailable = await this.verifyHelperAvailability(selectedHelper);
             if (!isAvailable) {
                 await interaction.reply({
@@ -147,12 +126,10 @@ export class RequestCarrySelectMenuHandler {
                 return;
             }
 
-            // Update session data
             const data = RequestCarryButtonHandler.getSessionData(userId);
             data.selectedHelper = selectedHelper;
             RequestCarryButtonHandler.setSessionData(userId, data);
 
-            // Update the interface
             await this.updateInterface(interaction, userId, data);
 
         } catch (error) {
@@ -164,24 +141,17 @@ export class RequestCarrySelectMenuHandler {
         }
     }
 
-    /**
-     * Update the interface with new data
-     */
     private static async updateInterface(interaction: StringSelectMenuInteraction, userId: string, data: RequestCarryData): Promise<void> {
-        // Use the builder directly
+        
         const builder = new RequestCarryBuilder(data, userId, true);
         const response = builder.build();
 
-        // Always update the original message, never create a reply
         await safeUpdate(interaction, {
             components: response.components,
             flags: MessageFlags.IsComponentsV2
         });
     }
 
-    /**
-     * Validation methods
-     */
     private static isValidGame(game: string): boolean {
         const validGames = ['als', 'av', 'ac'];
         return validGames.includes(game);
@@ -206,37 +176,27 @@ export class RequestCarrySelectMenuHandler {
     }
 
     private static async verifyHelperAvailability(helperId: string): Promise<boolean> {
-        // TODO: Implement helper availability check
-        // This would check if the helper is still active and available
-        // For now, return true as a placeholder
+        
         return true;
     }
 
-    /**
-     * Extract user ID from custom ID
-     */
     private static extractUserIdFromCustomId(customId: string): string {
         const parts = customId.split('_');
-        // Find the user ID part (typically after the action part)
+        
         for (let i = 0; i < parts.length; i++) {
-            if (parts[i].match(/^\d{17,19}$/)) { // Discord user ID pattern
+            if (parts[i].match(/^\d{17,19}$/)) { 
                 return parts[i];
             }
         }
         return '';
     }
 
-    /**
-     * Sync session data with current message state
-     */
     private static async syncWithCurrentState(interaction: StringSelectMenuInteraction, userId: string): Promise<void> {
         try {
             const currentData = RequestCarryButtonHandler.getSessionData(userId);
             
-            // Parse current state from message components
             const fullContent = JSON.stringify(interaction.message?.components || {});
             
-            // Parse game from display text
             if (fullContent.includes('Anime Last Stand') && !currentData.game) {
                 currentData.game = 'als';
             } else if (fullContent.includes('Anime Vanguard') && !currentData.game) {
@@ -245,7 +205,6 @@ export class RequestCarrySelectMenuHandler {
                 currentData.game = 'ac';
             }
             
-            // Try to parse existing goal
             if (!currentData.goal) {
                 const goalMatch = fullContent.match(/Goal Description.*?\[SET\].*?"([^"]+)"/);
                 if (goalMatch && goalMatch[1]) {
@@ -253,13 +212,10 @@ export class RequestCarrySelectMenuHandler {
                 }
             }
             
-            // Try to parse canJoinLinks from display text
             if (currentData.canJoinLinks === undefined) {
-                if (fullContent.includes('Yes - Can join Discord voice channels') || 
-                    fullContent.includes('Can join Discord voice channels and links')) {
+                if (fullContent.includes('I can Join Links')) {
                     currentData.canJoinLinks = true;
-                } else if (fullContent.includes('No - Cannot join Discord voice channels') || 
-                           fullContent.includes('Cannot join Discord voice channels and links')) {
+                } else if (fullContent.includes('I need to add The Helper')) {
                     currentData.canJoinLinks = false;
                 }
             }
@@ -270,9 +226,6 @@ export class RequestCarrySelectMenuHandler {
         }
     }
 
-    /**
-     * Handle errors in select menu processing
-     */
     private static async handleError(interaction: StringSelectMenuInteraction, error: any): Promise<void> {
         console.error('Request carry select menu handler error:', error);
         

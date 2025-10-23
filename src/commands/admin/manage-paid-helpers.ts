@@ -174,7 +174,6 @@ async function handleRemovePaidHelper(interaction: ChatInputCommandInteraction):
             return;
         }
 
-        // Remove paid helper status
         await db.updateHelper(user.id, { is_paid_helper: false });
 
         const successEmbed = new EmbedBuilder()
@@ -242,8 +241,6 @@ async function handleListPaidHelpers(interaction: ChatInputCommandInteraction): 
         await db.close();
     }
 }
-
-// Bio functionality removed - no longer needed
 
 async function handleCommandError(interaction: ChatInputCommandInteraction, error: any): Promise<void> {
     console.error("Manage paid helpers command error:", error);

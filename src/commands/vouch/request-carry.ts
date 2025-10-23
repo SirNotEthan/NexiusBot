@@ -122,7 +122,6 @@ const data = new SlashCommandBuilder()
             )
     );
 
-
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
         if (!isInteractionValid(interaction)) {
@@ -130,7 +129,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
             return;
         }
 
-        // Check if user is blacklisted from tickets
         const blacklistRoleId = process.env.TICKET_BLACKLIST_ROLE_ID;
         if (blacklistRoleId && interaction.member && typeof interaction.member !== 'string' && 'roles' in interaction.member) {
             const roleManager = interaction.member.roles;
@@ -170,7 +168,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         if (!deferred) return;
 
         if (ticketType === 'regular') {
-            // Check if user has booster role (bypasses requirements)
+            
             const boosterRoleIds = process.env.BOOSTER_ROLE_IDS?.split(',') || [];
             const member = interaction.member;
             let hasBoosterRole = false;
@@ -248,7 +246,7 @@ async function showTicketForm(interaction: ChatInputCommandInteraction | StringS
         }
     } catch (error) {
         console.error('[TICKET_FORM] Error showing ticket form:', error);
-        // Don't throw - just log the error to prevent crashes
+        
     }
 }
 
@@ -268,7 +266,7 @@ async function showTicketFormWithUpdate(interaction: StringSelectMenuInteraction
         });
     } catch (error) {
         console.error('[TICKET_FORM_UPDATE] Error updating ticket form:', error);
-        // Try to defer and edit as a fallback
+        
         try {
             if (!interaction.deferred && !interaction.replied) {
                 await interaction.deferUpdate();
@@ -290,7 +288,6 @@ function createVouchTicketDisplay(ticketData: VouchTicketData): any[] {
     const totalFields = 4;
     const components = [];
 
-    // Header with professional messaging and game context
     const typeLabel = ticketData.type === 'paid' ? 'Paid' : 'Regular';
     const gameContext = ticketData.game ? ` for ${getGameDisplayName(ticketData.game)}` : '';
     const headerText = new TextDisplayBuilder()
@@ -343,23 +340,18 @@ function createVouchTicketDisplay(ticketData: VouchTicketData): any[] {
 function createVouchTicketComponents(ticketData: VouchTicketData, userId: string): any[] {
     const allComponents = [];
 
-    // Create main content container
     const mainContainer = new ContainerBuilder();
     if (!(mainContainer as any).components) {
         (mainContainer as any).components = [];
     }
 
-    // Add all display components to the main container
     const displayComponents = createVouchTicketDisplay(ticketData);
     (mainContainer as any).components.push(...displayComponents);
 
-    // Add separator before controls
     (mainContainer as any).components.push(new SeparatorBuilder());
 
-    // Add interactive controls to the main container
     addControlsToContainer(mainContainer, ticketData, userId);
 
-    // Add the main container to components
     allComponents.push(mainContainer);
 
     return allComponents;
@@ -371,7 +363,6 @@ function addControlsToContainer(container: ContainerBuilder, ticketData: VouchTi
     }
     const isComplete = ticketData.game && ticketData.gamemode && ticketData.goal && ticketData.canJoinLinks !== undefined;
 
-    // Calculate completion for button labels
     const completedFields = [
         ticketData.game,
         ticketData.gamemode,
@@ -382,7 +373,6 @@ function addControlsToContainer(container: ContainerBuilder, ticketData: VouchTi
 
     const gamemodeOptions = getGamemodeOptions(ticketData.game);
 
-    // Game/Gamemode selection - ensure we only add if there are valid options
     if (gamemodeOptions.length > 0) {
         const options = gamemodeOptions.map(option =>
             new StringSelectMenuOptionBuilder()
@@ -390,7 +380,6 @@ function addControlsToContainer(container: ContainerBuilder, ticketData: VouchTi
                 .setValue(option.value)
         );
 
-        // Ensure we have valid options before creating the select menu
         if (options.length > 0) {
             const placeholder = ticketData.gamemode
                 ? `Selected: ${ticketData.gamemode} (click to change)`
@@ -402,14 +391,13 @@ function addControlsToContainer(container: ContainerBuilder, ticketData: VouchTi
                 .addOptions(options);
 
             const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(gamemodeSelect);
-            // Only push if the row has valid components
+            
             if (selectRow.components && selectRow.components.length > 0) {
                 (container as any).components.push(selectRow);
             }
         }
     }
 
-    // Action buttons row with professional labels
     const actionButtons = [
         new ButtonBuilder()
             .setCustomId(`request_carry_goal_${userId}`)
@@ -425,16 +413,14 @@ function addControlsToContainer(container: ContainerBuilder, ticketData: VouchTi
             .setStyle(ticketData.robloxUsername ? ButtonStyle.Success : ButtonStyle.Secondary)
     ];
 
-    // Ensure we have valid buttons before creating the row
     if (actionButtons.length > 0 && actionButtons.length <= 5) {
         const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(actionButtons);
-        // Only push if the row has valid components
+        
         if (actionRow.components && actionRow.components.length > 0) {
             (container as any).components.push(actionRow);
         }
     }
 
-    // Submit/Cancel buttons row with professional messaging
     const submitLabel = isComplete
         ? 'Create Help Request'
         : `Need ${totalFields - completedFields} more field${totalFields - completedFields !== 1 ? 's' : ''}`;
@@ -451,10 +437,9 @@ function addControlsToContainer(container: ContainerBuilder, ticketData: VouchTi
             .setStyle(ButtonStyle.Danger)
     ];
 
-    // Ensure we have valid buttons before creating the row
     if (submitButtons.length > 0 && submitButtons.length <= 5) {
         const submitRow = new ActionRowBuilder<ButtonBuilder>().addComponents(submitButtons);
-        // Only push if the row has valid components
+        
         if (submitRow.components && submitRow.components.length > 0) {
             (container as any).components.push(submitRow);
         }
@@ -520,7 +505,6 @@ export async function createVouchTicket(
             });
         }
 
-        // Add manager roles to initial permissions
         const managerRoleIds = process.env.MANAGER_ROLE_IDS?.split(',') || [];
         for (const roleId of managerRoleIds) {
             if (roleId.trim()) {
@@ -536,7 +520,6 @@ export async function createVouchTicket(
             }
         }
 
-        // Create temporary channel first
         const tempChannelName = `${ticketData.type}-${ticketData.game}-temp-${Date.now()}`;
         const ticketChannel = await guild.channels.create({
             name: tempChannelName,
@@ -548,7 +531,7 @@ export async function createVouchTicket(
         let ticketNumber: number;
 
         try {
-            // Create ticket with atomic number generation
+            
             const ticketResult = await db.createTicketWithAutoNumber({
                 user_id: userId,
                 user_tag: userTag,
@@ -563,7 +546,6 @@ export async function createVouchTicket(
                 claimed_by_tag: ticketData.type === 'paid' && ticketData.selectedHelper ? 'Selected Helper' : undefined
             });
 
-            // Rename channel with actual ticket number
             const finalChannelName = `${ticketData.type}-${ticketResult.ticketNumber}`;
             await ticketChannel.setName(finalChannelName);
 
@@ -572,7 +554,7 @@ export async function createVouchTicket(
             ticketNumber = parseInt(ticketResult.ticketNumber);
 
         } catch (ticketError) {
-            // If ticket creation fails, clean up the channel
+            
             console.error('Error during atomic ticket creation, cleaning up channel:', ticketError);
             try {
                 await ticketChannel.delete('Failed to create ticket record');
@@ -584,13 +566,11 @@ export async function createVouchTicket(
 
         const components = [];
 
-        // Create main ticket container using Components V2
         const mainContainer = new ContainerBuilder();
         if (!(mainContainer as any).components) {
             (mainContainer as any).components = [];
         }
 
-        // Header
         const typeLabel = ticketData.type === 'paid' ? 'Paid Help Ticket' : 'Regular Help Ticket';
         const statusText = ticketData.type === 'paid' && ticketData.selectedHelper ? '\n**Status:** Assigned' : '';
         const headerText = new TextDisplayBuilder()
@@ -740,8 +720,6 @@ export function createRobloxUsernameModal(userId: string): ModalBuilder {
 
     return modal;
 }
-
-
 
 async function handleTicketError(interaction: ChatInputCommandInteraction, error: any): Promise<void> {
     console.error("Carry request command error:", error);

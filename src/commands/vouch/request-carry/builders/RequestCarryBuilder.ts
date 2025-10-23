@@ -12,7 +12,6 @@ import {
     InteractionReplyOptions,
     MessageCreateOptions
 } from 'discord.js';
-// import { ModernComponentBuilder } from '../../../components/v2/builders/ComponentBuilder';
 
 export interface RequestCarryData {
     type: 'regular' | 'paid';
@@ -27,10 +26,6 @@ export interface RequestCarryData {
     };
 }
 
-/**
- * Modern Components V2 builder for request-carry command
- * Provides clean, structured UI with improved UX
- */
 export class RequestCarryBuilder {
     private data: RequestCarryData;
     private userId: string;
@@ -42,9 +37,6 @@ export class RequestCarryBuilder {
         this.useV2 = useComponentsV2;
     }
 
-    /**
-     * Build the complete request carry interface
-     */
     build(): InteractionReplyOptions & MessageCreateOptions {
         if (this.useV2) {
             return this.buildV2();
@@ -53,13 +45,9 @@ export class RequestCarryBuilder {
         }
     }
 
-    /**
-     * Build using Components V2
-     */
     private buildV2(): InteractionReplyOptions & MessageCreateOptions {
         const components: any[] = [];
 
-        // Professional header without emojis
         const typeLabel = this.data.type === 'paid' ? 'Paid' : 'Regular';
         const gameDisplay = this.data.game ? this.getGameDisplayName(this.data.game) : 'Game';
 
@@ -68,7 +56,6 @@ export class RequestCarryBuilder {
         components.push(headerText);
         components.push(new SeparatorBuilder());
 
-        // Progress tracking section
         const progress = this.calculateProgress();
         const progressPercent = Math.round((progress.completed / progress.total) * 100);
         const progressBar = "█".repeat(Math.floor(progress.completed / progress.total * 10)) +
@@ -79,7 +66,6 @@ export class RequestCarryBuilder {
         components.push(progressText);
         components.push(new SeparatorBuilder());
 
-        // Main form container with fields only (no ActionRows inside)
         const mainContainer = new ContainerBuilder();
         if (!(mainContainer as any).components) {
             (mainContainer as any).components = [];
@@ -87,7 +73,6 @@ export class RequestCarryBuilder {
         this.addFormFieldsV2(mainContainer);
         components.push(mainContainer);
 
-        // Add interactive controls (ActionRows) at the top level, not in containers
         this.addInteractiveControlsV2(components);
 
         return {
@@ -96,29 +81,23 @@ export class RequestCarryBuilder {
         };
     }
 
-    /**
-     * Add form fields only (no interactive controls)
-     */
     private addFormFieldsV2(container: ContainerBuilder): void {
-        // Ensure container has components array
+        
         if (!(container as any).components) {
             (container as any).components = [];
         }
 
-        // Form fields section
         const fieldsContainer = new ContainerBuilder();
         if (!(fieldsContainer as any).components) {
             (fieldsContainer as any).components = [];
         }
         
-        // Game field
         const gameStatus = this.data.game ? 'SET' : 'REQUIRED';
         const gameDisplay = this.data.game ? this.getGameDisplayName(this.data.game) : 'Game will be pre-selected based on your command choice';
         const gameText = new TextDisplayBuilder()
             .setContent(`**Game** [${gameStatus}]\n${gameDisplay}`);
         fieldsContainer.components.push(gameText);
 
-        // Gamemode field - only show if game is selected
         if (this.data.game) {
             const gamemodeStatus = this.data.gamemode ? 'SET' : 'REQUIRED';
             const gamemodeDisplay = this.data.gamemode ? this.getGamemodeDisplayName(this.data.gamemode) : 'Select a gamemode from the dropdown below';
@@ -127,14 +106,12 @@ export class RequestCarryBuilder {
             fieldsContainer.components.push(gamemodeText);
         }
 
-        // Goal field
         const goalStatus = this.data.goal ? 'SET' : 'REQUIRED';
         const goalDisplay = this.data.goal || 'Click "Set Goal" to describe what you need help with';
         const goalText = new TextDisplayBuilder()
             .setContent(`**Goal Description** [${goalStatus}]\n${goalDisplay}`);
         fieldsContainer.components.push(goalText);
 
-        // Links field
         const linksStatus = this.data.canJoinLinks !== undefined ? 'SET' : 'REQUIRED';
         const linksDisplay = this.data.canJoinLinks !== undefined
             ? (this.data.canJoinLinks ? 'Yes - Can join Discord voice channels and links' : 'No - Cannot join Discord voice channels and links')
@@ -143,7 +120,6 @@ export class RequestCarryBuilder {
             .setContent(`**Can Join Voice/Links** [${linksStatus}]\n${linksDisplay}`);
         fieldsContainer.components.push(linksText);
 
-        // Selected helper (for paid carries)
         if (this.data.type === 'paid') {
             const helperStatus = this.data.selectedHelper ? 'SET' : 'OPTIONAL';
             const helperDisplay = this.data.selectedHelper
@@ -154,17 +130,13 @@ export class RequestCarryBuilder {
             fieldsContainer.components.push(helperText);
         }
 
-        // Only add fields if they exist
         if (fieldsContainer.components && fieldsContainer.components.length > 0) {
             container.components.push(...fieldsContainer.components);
         }
     }
 
-    /**
-     * Add interactive controls (ActionRows) directly to components array
-     */
     private addInteractiveControlsV2(components: any[]): void {
-        // Game/Gamemode selection
+        
         if (this.data.game) {
             const gamemodeSelect = this.createGamemodeSelect();
             if (gamemodeSelect) {
@@ -173,14 +145,12 @@ export class RequestCarryBuilder {
             }
         }
 
-        // Action buttons row
         const actionButtons = this.createActionButtons();
         if (actionButtons.length > 0) {
             const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(actionButtons);
             components.push(actionRow);
         }
 
-        // Secondary buttons row
         const secondaryButtons = this.createSecondaryButtons();
         if (secondaryButtons.length > 0) {
             const secondaryRow = new ActionRowBuilder<ButtonBuilder>().addComponents(secondaryButtons);
@@ -188,29 +158,17 @@ export class RequestCarryBuilder {
         }
     }
 
-    /**
-     * Add controls to a container
-     */
     private addControlsToContainer(container: ContainerBuilder): void {
-        // Ensure container has components array
+        
         if (!(container as any).components) {
             (container as any).components = [];
         }
 
-        // Note: ContainerBuilder in Components V2 expects Section/Text/etc builders, not ActionRows
-        // ActionRows should be added at the top level, not inside containers
-
-        // We need to restructure this - Components V2 doesn't nest ActionRows in containers
-        // Instead, we'll add action rows directly to the components array at the top level
     }
 
-    /**
-     * Create interactive controls (legacy method for backwards compatibility)
-     */
     private createControls(): ActionRowBuilder<any>[] {
         const controls: ActionRowBuilder<any>[] = [];
 
-        // Game/Gamemode selection
         if (this.data.game) {
             const gamemodeSelect = this.createGamemodeSelect();
             if (gamemodeSelect) {
@@ -218,20 +176,15 @@ export class RequestCarryBuilder {
             }
         }
 
-        // Action buttons
         const actionButtons = this.createActionButtons();
         controls.push(new ActionRowBuilder<ButtonBuilder>().addComponents(actionButtons));
 
-        // Secondary buttons
         const secondaryButtons = this.createSecondaryButtons();
         controls.push(new ActionRowBuilder<ButtonBuilder>().addComponents(secondaryButtons));
 
         return controls;
     }
 
-    /**
-     * Create gamemode selection dropdown
-     */
     private createGamemodeSelect(): StringSelectMenuBuilder | null {
         if (!this.data.game) return null;
 
@@ -249,9 +202,6 @@ export class RequestCarryBuilder {
             ));
     }
 
-    /**
-     * Create primary action buttons
-     */
     private createActionButtons(): ButtonBuilder[] {
         return [
             new ButtonBuilder()
@@ -271,9 +221,6 @@ export class RequestCarryBuilder {
         ];
     }
 
-    /**
-     * Create secondary action buttons
-     */
     private createSecondaryButtons(): ButtonBuilder[] {
         const isComplete = this.isFormComplete();
         
@@ -291,21 +238,14 @@ export class RequestCarryBuilder {
         ];
     }
 
-    /**
-     * V1 fallback for compatibility
-     */
     private buildV1Fallback(): InteractionReplyOptions & MessageCreateOptions {
-        // Implementation would use traditional embeds and action rows
-        // This maintains backward compatibility while we transition to V2
+        
         return {
             content: "V1 fallback not implemented yet",
             ephemeral: true
         };
     }
 
-    /**
-     * Helper methods
-     */
     private createFieldContent(label: string, value: string | null): string {
         const status = value ? '✅' : '❌';
         const displayValue = value || '*Not set*';
@@ -396,9 +336,6 @@ export class RequestCarryBuilder {
     }
 }
 
-/**
- * Factory class for creating request carry builders
- */
 export class RequestCarryBuilderFactory {
     static create(type: 'regular' | 'paid', userId: string, useV2 = true): RequestCarryBuilder {
         const data: RequestCarryData = { type };

@@ -19,7 +19,7 @@ export async function handleReviewButtons(interaction: ButtonInteraction): Promi
     if (parts.length < expectedParts) {
         await interaction.reply({
             content: "❌ Invalid review button data.",
-            flags: [64] // ephemeral
+            flags: [64] 
         });
         return;
     }
@@ -32,7 +32,7 @@ export async function handleReviewButtons(interaction: ButtonInteraction): Promi
     if (rating < 1 || rating > 5) {
         await interaction.reply({
             content: "❌ Invalid rating value.",
-            flags: [64] // ephemeral
+            flags: [64] 
         });
         return;
     }
@@ -44,7 +44,7 @@ export async function handleReviewButtons(interaction: ButtonInteraction): Promi
         if (!ticket) {
             await interaction.reply({
                 content: "❌ Could not find ticket information.",
-                flags: [64] // ephemeral
+                flags: [64] 
             });
             return;
         }
@@ -52,7 +52,7 @@ export async function handleReviewButtons(interaction: ButtonInteraction): Promi
         if (ticket.user_id !== interaction.user.id) {
             await interaction.reply({
                 content: "❌ You can only review your own tickets.",
-                flags: [64] // ephemeral
+                flags: [64] 
             });
             return;
         }
@@ -63,7 +63,7 @@ export async function handleReviewButtons(interaction: ButtonInteraction): Promi
         console.error('Error handling review button:', error);
         await interaction.reply({
             content: "❌ An error occurred while processing your review. Please try again.",
-            flags: [64] // ephemeral
+            flags: [64] 
         });
     }
 }
@@ -259,7 +259,6 @@ async function sendToVouchChannel(guildId: string, vouchData: {
             return;
         }
 
-        // Fetch channel directly from client instead of guild to handle cross-guild channels
         const historyChannel = await client.channels.fetch(historyChannelId);
         if (!historyChannel?.isTextBased()) {
             console.error(`Vouch channel not found or not text-based: ${historyChannelId}`);

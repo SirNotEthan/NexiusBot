@@ -33,17 +33,17 @@ class BotLogger {
     private getColor(level: LogLevel): ColorResolvable {
         switch (level) {
             case LogLevel.SUCCESS:
-                return 0x00ff00; // Green
+                return 0x00ff00; 
             case LogLevel.INFO:
-                return 0x0099ff; // Blue
+                return 0x0099ff; 
             case LogLevel.WARN:
-                return 0xff9900; // Orange
+                return 0xff9900; 
             case LogLevel.ERROR:
-                return 0xff0000; // Red
+                return 0xff0000; 
             case LogLevel.DEBUG:
-                return 0x9900ff; // Purple
+                return 0x9900ff; 
             default:
-                return 0x808080; // Gray
+                return 0x808080; 
         }
     }
 
@@ -72,7 +72,7 @@ class BotLogger {
         if (value.length <= maxLength) {
             return value;
         }
-        // Leave room for '...' ellipsis
+        
         return value.slice(0, maxLength - 3) + '...';
     }
 
@@ -117,7 +117,7 @@ class BotLogger {
                 .setTimestamp(timestamp);
 
             if (entry.fields && entry.fields.length > 0) {
-                // Validate all field values before adding them
+                
                 const validatedFields = entry.fields.map(field => ({
                     ...field,
                     value: this.validateFieldValue(field.value)
@@ -321,7 +321,7 @@ class BotLogger {
                     }
                 ]
             });
-        } else if (executionTime && executionTime > 1000) { // Log slow queries
+        } else if (executionTime && executionTime > 1000) { 
             await this.warn('Slow Database Query', `Query took ${executionTime}ms to execute`, {
                 fields: [
                     {

@@ -193,7 +193,6 @@ function setupComponentCollectors(interaction: ChatInputCommandInteraction, tick
     });
 }
 
-
 async function handleSelectMenu(
     selectInteraction: StringSelectMenuInteraction, 
     ticketData: TicketData, 
@@ -203,7 +202,6 @@ async function handleSelectMenu(
 
     await updateTicketEmbed(selectInteraction, ticketData, originalInteraction);
 }
-
 
 async function updateTicketEmbed(
     componentInteraction: any, 

@@ -245,7 +245,7 @@ async function submitTicket(buttonInteraction: ButtonInteraction, ticketData: an
         .setTimestamp();
 
     try {
-        // Build permission overwrites
+        
         const permissionOverwrites: any[] = [
             {
                 id: guild.id,
@@ -257,7 +257,6 @@ async function submitTicket(buttonInteraction: ButtonInteraction, ticketData: an
             }
         ];
 
-        // Add manager roles to initial permissions
         const managerRoleIds = process.env.MANAGER_ROLE_IDS?.split(',') || [];
         for (const roleId of managerRoleIds) {
             if (roleId.trim()) {

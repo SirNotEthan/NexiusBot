@@ -24,8 +24,6 @@ import {
     handleVouchRatingSelection
 } from '../interactions/selectMenus';
 
-// VouchTicketData import removed - using new modular system
-
 import {
     handleTicketModals,
     handleEditTicketModal,
@@ -62,7 +60,6 @@ function getInteractionTypeName(interaction: any): string {
     if (interaction.isChatInputCommand && interaction.isChatInputCommand()) return 'Command';
     return 'Unknown';
 }
-
 
 export async function execute(interaction: Interaction): Promise<void> {
     const client = interaction.client as Client;
@@ -178,14 +175,12 @@ async function handleButtonInteraction(interaction: ButtonInteraction): Promise<
         return;
     }
 
-    // Handle Components V2 carry request embed button through InteractionRouter
     if (interaction.customId === 'carry_request_embed_v2' || interaction.customId === 'command_v2_carry_request') {
         const { InteractionRouter } = await import('../interactions/InteractionRouter');
         await InteractionRouter.routeButtonInteraction(interaction);
         return;
     }
 
-    // Handle all ticket-related and request-carry button interactions through unified router
     if (interaction.customId.startsWith('request_carry_') ||
         interaction.customId.startsWith('ticket_') ||
         interaction.customId === 'claim_ticket' ||
@@ -199,8 +194,6 @@ async function handleButtonInteraction(interaction: ButtonInteraction): Promise<
         await InteractionRouter.routeButtonInteraction(interaction);
         return;
     }
-    
-    // Vouch ticket buttons removed - handled by new modular system
     
     if (interaction.customId.startsWith('leaderboard_')) {
         await handleLeaderboardButtons(interaction);
@@ -266,9 +259,6 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
         return;
     }
     
-    // Paid helper selection removed - handled by new system
-    
-    // Handle Components V2 game selection menus
     if (interaction.customId.startsWith('carry_request_game_select_') ||
         interaction.customId.startsWith('carry_request_embed_game_select_') ||
         interaction.customId.startsWith('command_v2_game_select_')) {
@@ -277,14 +267,12 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
         return;
     }
 
-    // Handle new modular request-carry interactions
     if (interaction.customId.startsWith('request_carry_gamemode_')) {
         const { InteractionRouter } = await import('../interactions/InteractionRouter');
         await InteractionRouter.routeSelectMenuInteraction(interaction);
         return;
     }
 
-    // Handle vouch-related select menus (ticket selection, rating selection, etc.)
     if (interaction.customId.startsWith('vouch_ticket_select_') ||
         interaction.customId.startsWith('vouch_rating_') ||
         interaction.customId.startsWith('vouch_gamemode_') ||
@@ -310,14 +298,12 @@ async function handleModalInteraction(interaction: ModalSubmitInteraction): Prom
         await handleTicketModals(interaction);
     }
     
-    // Handle new modular request-carry modal interactions
     if (interaction.customId.includes('request_carry_') && interaction.customId.includes('_modal_')) {
         const { InteractionRouter } = await import('../interactions/InteractionRouter');
         await InteractionRouter.routeModalInteraction(interaction);
         return;
     }
 
-    // Handle vouch-related modals
     if (interaction.customId.startsWith('vouch_goal_modal_') ||
         interaction.customId.startsWith('vouch_reason_modal_') ||
         interaction.customId.startsWith('paid_bio_modal_')) {
@@ -498,7 +484,6 @@ async function handleServiceInfoGameSelection(interaction: StringSelectMenuInter
         const gameName = getGameDisplayName(selectedGame);
         const gameEmoji = selectedGame === 'als' ? '⚔️' : '🛡️';
         
-        // Create formatted limit display
         const limitEntries = Object.entries(gameConfig.gameLimits).map(([gamemode, limit]) => {
             const formattedGamemode = gamemode.split('-').map(word => 
                 word.charAt(0).toUpperCase() + word.slice(1)
@@ -546,4 +531,4 @@ async function handleServiceInfoGameSelection(interaction: StringSelectMenuInter
         });
     }
 }
-
+

@@ -160,8 +160,6 @@ function createBioModal(userId: string): ModalBuilder {
     return modal;
 }
 
-// Bio functionality removed - now managed by staff only via /manage-paid-helpers
-
 export async function refreshTrackerBoard(interaction: any): Promise<void> {
     await displayTrackerBoard(interaction);
 }

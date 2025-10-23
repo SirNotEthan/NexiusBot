@@ -34,13 +34,12 @@ const data = new SlashCommandBuilder()
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
     try {
-        // Validate interaction
+        
         if (!isInteractionValid(interaction)) {
             console.warn('Interaction expired, cannot process carry request');
             return;
         }
 
-        // Check if user is blacklisted from tickets
         const blacklistRoleId = process.env.TICKET_BLACKLIST_ROLE_ID;
         if (blacklistRoleId && interaction.member && typeof interaction.member !== 'string' && 'roles' in interaction.member) {
             const roleManager = interaction.member.roles;
@@ -55,7 +54,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
             }
         }
 
-        // Check cooldown
         if (cooldownManager.isOnCooldown(interaction.user.id, 'carry_request')) {
             const remainingTime = cooldownManager.getRemainingCooldown(interaction.user.id, 'carry_request');
             const timeString = cooldownManager.formatRemainingTime(remainingTime);
@@ -67,26 +65,21 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
             return;
         }
 
-        // Get command options
         const ticketType = interaction.options.getString('type', true) as 'regular' | 'paid';
         const game = interaction.options.getString('game', true);
 
-        // Defer reply for processing
         const deferred = await safeDeferReply(interaction, { ephemeral: true });
         if (!deferred) return;
 
-        // Create initial request data
         const requestData: RequestCarryData = {
             type: ticketType,
             game: game
         };
 
-        // Initialize session data
         RequestCarryButtonHandler.setSessionData(interaction.user.id, requestData);
 
-        // Check initial eligibility for regular carries
         if (ticketType === 'regular') {
-            // Check message requirement immediately and block if not met
+            
             const messageStats = await checkUserMessages(interaction.user.id);
             if (messageStats < 50) {
                 await interaction.editReply({
@@ -96,10 +89,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
             }
         }
 
-        // Show the request form
         await showRequestForm(interaction, requestData);
 
-        // Set cooldown after successful form display
         cooldownManager.setCooldown(interaction.user.id, 'carry_request');
 
     } catch (error) {
@@ -108,12 +99,9 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     }
 }
 
-/**
- * Show the request form interface
- */
 async function showRequestForm(interaction: ChatInputCommandInteraction, requestData: RequestCarryData): Promise<void> {
     try {
-        // Create the modern Components V2 interface
+        
         const builder = RequestCarryBuilderFactory.createWithData(requestData, interaction.user.id, true);
         const response = builder.build();
 
@@ -127,9 +115,6 @@ async function showRequestForm(interaction: ChatInputCommandInteraction, request
     }
 }
 
-/**
- * Check user message count for eligibility
- */
 async function checkUserMessages(userId: string): Promise<number> {
     try {
         const Database = (await import('../../../database/database')).default;
@@ -144,13 +129,10 @@ async function checkUserMessages(userId: string): Promise<number> {
         }
     } catch (error) {
         console.error('Error checking user messages:', error);
-        return 0; // Assume no messages on error
+        return 0; 
     }
 }
 
-/**
- * Handle command errors
- */
 async function handleCommandError(interaction: ChatInputCommandInteraction, error: any): Promise<void> {
     console.error("Request-carry command error:", error);
     
@@ -174,7 +156,6 @@ async function handleCommandError(interaction: ChatInputCommandInteraction, erro
 
 export default { data, execute };
 
-// Export handlers for the interaction router
 export { RequestCarryButtonHandler } from './handlers/ButtonHandler';
 export { RequestCarryModalHandler } from './handlers/ModalHandler';
 export { RequestCarrySelectMenuHandler } from './handlers/SelectMenuHandler';

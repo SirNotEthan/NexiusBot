@@ -155,7 +155,6 @@ async function initializeBot(): Promise<void> {
 
         botLogger.initialize(client);
 
-        // Initialize schedulers
         weeklyScheduler = new WeeklyScheduler(client);
         weeklyScheduler.start();
 

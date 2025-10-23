@@ -7,7 +7,6 @@ export const once = false;
 export async function execute(message: Message): Promise<void> {
     if (message.author.bot || !message.guild) return;
     
-    // Don't track messages in ticket categories to prevent farming
     const ticketCategoryIds = [
         process.env.TICKETS_CATEGORY_ID,
         process.env.PAID_TICKETS_CATEGORY_ID,
@@ -74,7 +73,6 @@ export async function execute(message: Message): Promise<void> {
         return;
     }
     
-    // Track message in chat channel too (if not a ticket channel)
     if (!isTicketChannel) {
         const db = new Database();
         
