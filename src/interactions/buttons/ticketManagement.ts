@@ -93,8 +93,27 @@ export async function handleClaimTicket(interaction: ButtonInteraction): Promise
         return;
     }
 
+    // Ensure helper exists in database before claiming ticket
+    let helper = await db.getHelper(interaction.user.id);
+    if (!helper) {
+        console.log(`[CLAIM_TICKET] Helper ${interaction.user.id} (${interaction.user.tag}) not found in database, creating new helper record...`);
+        await db.createHelper({
+            user_id: interaction.user.id,
+            user_tag: interaction.user.tag,
+            helper_rank: 'Helper',
+            total_vouches: 0,
+            helper_since: Date.now(),
+            weekly_vouches: 0,
+            monthly_vouches: 0,
+            average_rating: 0.0,
+            is_paid_helper: false,
+            vouches_for_paid_access: 0
+        });
+        console.log(`[CLAIM_TICKET] Helper ${interaction.user.tag} successfully added to database`);
+    }
+
     await db.claimTicket(ticket.ticket_number, interaction.user.id, interaction.user.tag);
-    
+
     await botLogger.logTicketClaimed(ticket.ticket_number, interaction.user.id, ticket.user_id);
 
     const originalMessage = interaction.message;

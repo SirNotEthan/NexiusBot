@@ -35,6 +35,16 @@ export const FREE_CARRIES_CONFIG: Record<string, GameConfig> = {
             'breach': 1,
             'portals': 6
         }
+    },
+    'ac': {
+        displayName: 'Anime Crusaders',
+        gameLimits: {
+            'spirit-invasion': 3,
+            'raids': 4,
+            'story': 5,
+            'portals': 3,
+            'legend-stages': 4
+        }
     }
 };
 

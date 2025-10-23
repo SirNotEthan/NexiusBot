@@ -325,7 +325,8 @@ export class RequestCarryBuilder {
     private getGameDisplayName(game: string): string {
         const gameNames: Record<string, string> = {
             'als': 'Anime Last Stand',
-            'av': 'Anime Vanguards'
+            'av': 'Anime Vanguards',
+            'ac': 'Anime Crusaders'
         };
         return gameNames[game] || game;
     }
@@ -333,7 +334,8 @@ export class RequestCarryBuilder {
     private getGameEmoji(game?: string): string {
         const gameEmojis: Record<string, string> = {
             'als': '⚔️',
-            'av': '🔰'
+            'av': '🔰',
+            'ac': '⚡'
         };
         return game ? gameEmojis[game] || '🎮' : '🎮';
     }
@@ -352,7 +354,8 @@ export class RequestCarryBuilder {
             'towers': 'Tower Challenges',
             'events': 'Limited Events',
             'survival': 'Survival Mode',
-            'breach': 'Breach Missions'
+            'breach': 'Breach Missions',
+            'spirit-invasion': 'Spirit Invasion'
         };
         return gamemodeNames[gamemode] || gamemode;
     }
@@ -379,9 +382,16 @@ export class RequestCarryBuilder {
                 { label: '👑 Legend Stages', value: 'legend-stages', description: 'Legend stages' },
                 { label: '💀 Dungeons', value: 'dungeons', description: 'Dungeon runs' },
                 { label: '🩹 Survival', value: 'survival', description: 'Survival mode' }
+            ],
+            'ac': [
+                { label: '👻 Spirit Invasion', value: 'spirit-invasion', description: 'Spirit Invasion mode' },
+                { label: '⚔️ Raids', value: 'raids', description: 'Raid battles' },
+                { label: '📖 Story', value: 'story', description: 'Main story progression' },
+                { label: '🌀 Portals', value: 'portals', description: 'Portal challenges' },
+                { label: '👑 Legend Stages', value: 'legend-stages', description: 'Legend stages' }
             ]
         };
-        
+
         return gamemodes[game] || [];
     }
 }

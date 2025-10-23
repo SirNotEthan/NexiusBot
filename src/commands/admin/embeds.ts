@@ -71,7 +71,7 @@ async function sendCarryRequestEmbed(interaction: ChatInputCommandInteraction): 
     (mainContainer as any).components.push(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large));
 
     const gamesText = new TextDisplayBuilder()
-        .setContent(`**Supported Games:**\n**Anime Last Stand** (ALS)\n**Anime Vanguards** (AV)`);
+        .setContent(`**Supported Games:**\n**Anime Last Stand** (ALS)\n**Anime Vanguards** (AV)\n**Anime Crusaders** (AC)`);
     (mainContainer as any).components.push(gamesText);
 
     (mainContainer as any).components.push(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Large));

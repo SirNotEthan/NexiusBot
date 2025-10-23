@@ -27,7 +27,8 @@ import { safeReply, safeEditReply, safeDeferReply, isInteractionValid } from '..
 function getGameDisplayName(gameCode: string): string {
     const gameNames: { [key: string]: string } = {
         'als': 'Anime Last Stand',
-        'av': 'Anime Vanguards'
+        'av': 'Anime Vanguards',
+        'ac': 'Anime Crusaders'
     };
     return gameNames[gameCode] || gameCode.toUpperCase();
 }
@@ -76,6 +77,14 @@ function getGamemodeOptions(game: string): { label: string; value: string }[] {
             { label: '💀 Dungeons', value: 'dungeons' },
             { label: '🩹 Survival', value: 'survival' }
         ];
+    } else if (game === 'ac') {
+        return [
+            { label: '👻 Spirit Invasion', value: 'spirit-invasion' },
+            { label: '⚔️ Raids', value: 'raids' },
+            { label: '📖 Story', value: 'story' },
+            { label: '🌀 Portals', value: 'portals' },
+            { label: '👑 Legend Stages', value: 'legend-stages' }
+        ];
     }
     return [];
 }
@@ -108,7 +117,8 @@ const data = new SlashCommandBuilder()
             .setRequired(true)
             .addChoices(
                 { name: 'Anime Last Stand', value: 'als' },
-                { name: 'Anime Vanguard', value: 'av' }
+                { name: 'Anime Vanguard', value: 'av' },
+                { name: 'Anime Crusaders', value: 'ac' }
             )
     );
 
@@ -145,21 +155,39 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
         if (!deferred) return;
 
         if (ticketType === 'regular') {
-            const db = new Database();
-            await db.connect();
+            // Check if user has booster role (bypasses requirements)
+            const boosterRoleIds = process.env.BOOSTER_ROLE_IDS?.split(',') || [];
+            const member = interaction.member;
+            let hasBoosterRole = false;
 
-            try {
-                const messageStats = await db.getUserMessageStats(interaction.user.id);
-                const messageCount = messageStats?.message_count || 0;
-
-                if (messageCount < 50) {
-                    await safeEditReply(interaction, {
-                        content: `❌ **Message Requirement Not Met**\n\nYou currently have **${messageCount}** messages today. You need at least **50 messages** to request a free carry.\n\n*Send more messages in the server and try again!*`
-                    });
-                    return;
+            if (member && typeof member !== 'string' && 'roles' in member) {
+                const roleManager = member.roles;
+                if (roleManager && typeof roleManager === 'object' && 'cache' in roleManager) {
+                    hasBoosterRole = boosterRoleIds.some(roleId =>
+                        roleId.trim() && roleManager.cache.has(roleId.trim())
+                    );
                 }
-            } finally {
-                await db.close();
+            }
+
+            if (!hasBoosterRole) {
+                const db = new Database();
+                await db.connect();
+
+                try {
+                    const messageStats = await db.getUserMessageStats(interaction.user.id);
+                    const messageCount = messageStats?.message_count || 0;
+
+                    if (messageCount < 50) {
+                        await safeEditReply(interaction, {
+                            content: `❌ **Message Requirement Not Met**\n\nYou currently have **${messageCount}** messages today. You need at least **50 messages** to request a free carry.\n\n*Send more messages in the server and try again!*`
+                        });
+                        return;
+                    }
+                } finally {
+                    await db.close();
+                }
+            } else {
+                console.log(`[CARRY_REQUEST] User ${interaction.user.tag} has booster role, bypassing message requirements`);
             }
         }
 
@@ -179,38 +207,61 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
 async function showTicketForm(interaction: ChatInputCommandInteraction | StringSelectMenuInteraction, ticketData: VouchTicketData): Promise<void> {
     if (!isInteractionValid(interaction)) {
-        console.warn('Interaction expired, cannot show ticket form');
+        console.warn('[TICKET_FORM] Interaction expired, cannot show ticket form');
         return;
     }
 
-    const components = createVouchTicketComponents(ticketData, interaction.user.id);
+    try {
+        const components = createVouchTicketComponents(ticketData, interaction.user.id);
 
-    if (interaction.replied || interaction.deferred) {
-        await safeEditReply(interaction, {
-            components: components,
-            flags: MessageFlags.IsComponentsV2
-        });
-    } else {
-        await safeReply(interaction, {
-            components: components,
-            flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral
-        });
+        if (interaction.replied || interaction.deferred) {
+            const edited = await safeEditReply(interaction, {
+                components: components,
+                flags: MessageFlags.IsComponentsV2
+            });
+            if (!edited) {
+                console.warn('[TICKET_FORM] Failed to edit reply, interaction may have expired');
+            }
+        } else {
+            const replied = await safeReply(interaction, {
+                components: components,
+                flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral
+            });
+            if (!replied) {
+                console.warn('[TICKET_FORM] Failed to send reply, interaction may have expired');
+            }
+        }
+    } catch (error) {
+        console.error('[TICKET_FORM] Error showing ticket form:', error);
+        // Don't throw - just log the error to prevent crashes
     }
 }
 
 async function showTicketFormWithUpdate(interaction: StringSelectMenuInteraction, ticketData: VouchTicketData): Promise<void> {
     if (!isInteractionValid(interaction)) {
-        console.warn('Interaction expired, cannot show ticket form');
+        console.warn('[TICKET_FORM_UPDATE] Interaction expired, cannot show ticket form');
         return;
     }
 
-    const components = createVouchTicketComponents(ticketData, interaction.user.id);
+    try {
+        const components = createVouchTicketComponents(ticketData, interaction.user.id);
 
-    await interaction.update({
-        content: null,
-        components: components,
-        flags: MessageFlags.IsComponentsV2
-    });
+        await interaction.update({
+            content: null,
+            components: components,
+            flags: MessageFlags.IsComponentsV2
+        });
+    } catch (error) {
+        console.error('[TICKET_FORM_UPDATE] Error updating ticket form:', error);
+        // Try to defer and edit as a fallback
+        try {
+            if (!interaction.deferred && !interaction.replied) {
+                await interaction.deferUpdate();
+            }
+        } catch (fallbackError) {
+            console.error('[TICKET_FORM_UPDATE] Fallback failed, interaction likely expired:', fallbackError);
+        }
+    }
 }
 
 function createVouchTicketDisplay(ticketData: VouchTicketData): any[] {
