@@ -18,7 +18,7 @@ function parseTicketDataFromInteraction(interaction: StringSelectMenuInteraction
         const customIdParts = interaction.customId.split('_');
         if (customIdParts.length > 3) {
             const gameFromId = customIdParts[customIdParts.length - 1];
-            if (gameFromId === 'av' || gameFromId === 'als') {
+            if (gameFromId === 'av' || gameFromId === 'als' || gameFromId === 'ac') {
                 ticketData.game = gameFromId;
             }
         }
@@ -36,6 +36,8 @@ function parseTicketDataFromInteraction(interaction: StringSelectMenuInteraction
                 ticketData.game = 'als';
             } else if (fullContent.includes('Anime Vanguard')) {
                 ticketData.game = 'av';
+            } else if (fullContent.includes('Anime Crusaders')) {
+                ticketData.game = 'ac';
             }
         }
 
@@ -80,7 +82,7 @@ function parseTicketDataFromInteraction(interaction: StringSelectMenuInteraction
         const customIdParts = interaction.customId.split('_');
         if (customIdParts.length > 3) {
             const gameFromId = customIdParts[customIdParts.length - 1];
-            if (gameFromId === 'av' || gameFromId === 'als') {
+            if (gameFromId === 'av' || gameFromId === 'als' || gameFromId === 'ac') {
                 ticketData.game = gameFromId;
             }
         }

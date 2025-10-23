@@ -183,19 +183,22 @@ export class RequestCarrySelectMenuHandler {
      * Validation methods
      */
     private static isValidGame(game: string): boolean {
-        const validGames = ['als', 'av'];
+        const validGames = ['als', 'av', 'ac'];
         return validGames.includes(game);
     }
 
     private static isValidGamemode(game: string, gamemode: string): boolean {
         const validGamemodes: Record<string, string[]> = {
             'av': [
-                'story', 'legend-stages', 'rift', 'inf', 'raids', 
+                'story', 'legend-stages', 'rift', 'inf', 'raids',
                 'sjw-dungeon', 'dungeons', 'portals', 'void', 'towers', 'events'
             ],
             'als': [
-                'story', 'legend-stages', 'raids', 'dungeons', 
-                'survival', 'breach', 'portals'
+                'story', 'legend-stages', 'raids', 'dungeons',
+                'survival', 'breach', 'portals', 'inf', 'towers'
+            ],
+            'ac': [
+                'spirit-invasion', 'raids', 'story', 'portals', 'legend-stages'
             ]
         };
 
@@ -238,6 +241,8 @@ export class RequestCarrySelectMenuHandler {
                 currentData.game = 'als';
             } else if (fullContent.includes('Anime Vanguard') && !currentData.game) {
                 currentData.game = 'av';
+            } else if (fullContent.includes('Anime Crusaders') && !currentData.game) {
+                currentData.game = 'ac';
             }
             
             // Try to parse existing goal

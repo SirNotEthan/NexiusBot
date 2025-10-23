@@ -27,7 +27,8 @@ const data = new SlashCommandBuilder()
             .setRequired(true)
             .addChoices(
                 { name: 'Anime Last Stand', value: 'als' },
-                { name: 'Anime Vanguards', value: 'av' }
+                { name: 'Anime Vanguards', value: 'av' },
+                { name: 'Anime Crusaders', value: 'ac' }
             )
     );
 
