@@ -158,7 +158,7 @@ export class RequestCarryModalHandler {
             if (!currentData.game) {
                 if (fullContent.includes('Anime Last Stand')) {
                     currentData.game = 'als';
-                } else if (fullContent.includes('Anime Vanguard')) {
+                } else if (fullContent.includes('Anime Vanguards')) {
                     currentData.game = 'av';
                 } else if (fullContent.includes('Anime Crusaders')) {
                     currentData.game = 'ac';

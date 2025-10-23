@@ -18,8 +18,10 @@ function parseTicketDataFromComponents(interaction: ModalSubmitInteraction): Vou
 
         if (fullContent.includes('Anime Last Stand')) {
             ticketData.game = 'als';
-        } else if (fullContent.includes('Anime Vanguard')) {
+        } else if (fullContent.includes('Anime Vanguards')) {
             ticketData.game = 'av';
+        } else if (fullContent.includes('Anime Crusaders')) {
+            ticketData.game = 'ac';
         }
 
         const gamemodeMatch = fullContent.match(/\*\*Gamemode\*\*\\n\`\`([^`]+)\`\`/);

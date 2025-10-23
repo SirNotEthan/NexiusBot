@@ -199,7 +199,7 @@ export class RequestCarrySelectMenuHandler {
             
             if (fullContent.includes('Anime Last Stand') && !currentData.game) {
                 currentData.game = 'als';
-            } else if (fullContent.includes('Anime Vanguard') && !currentData.game) {
+            } else if (fullContent.includes('Anime Vanguards') && !currentData.game) {
                 currentData.game = 'av';
             } else if (fullContent.includes('Anime Crusaders') && !currentData.game) {
                 currentData.game = 'ac';

@@ -27,7 +27,7 @@ function parseTicketDataFromInteraction(interaction: StringSelectMenuInteraction
         if (!ticketData.game) {
             if (fullContent.includes('Anime Last Stand')) {
                 ticketData.game = 'als';
-            } else if (fullContent.includes('Anime Vanguard')) {
+            } else if (fullContent.includes('Anime Vanguards')) {
                 ticketData.game = 'av';
             } else if (fullContent.includes('Anime Crusaders')) {
                 ticketData.game = 'ac';

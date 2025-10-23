@@ -234,12 +234,14 @@ export class RequestCarryButtonHandler {
             
             if (fullContent.includes('Anime Last Stand') && !currentData.game) {
                 currentData.game = 'als';
-            } else if (fullContent.includes('Anime Vanguard') && !currentData.game) {
+            } else if (fullContent.includes('Anime Vanguards') && !currentData.game) {
                 currentData.game = 'av';
+            } else if (fullContent.includes('Anime Crusaders') && !currentData.game) {
+                currentData.game = 'ac';
             }
             
             if (!currentData.gamemode) {
-                const gamemodes = ['story', 'legend-stages', 'raids', 'dungeons', 'survival', 'breach', 'portals', 'rift', 'inf', 'sjw-dungeon', 'void', 'towers', 'events'];
+                const gamemodes = ['spirit-invasion', 'story', 'legend-stages', 'raids', 'dungeons', 'survival', 'breach', 'portals', 'rift', 'inf', 'sjw-dungeon', 'void', 'towers', 'events'];
                 for (const gamemode of gamemodes) {
                     if (fullContent.toLowerCase().includes(gamemode)) {
                         currentData.gamemode = gamemode;
