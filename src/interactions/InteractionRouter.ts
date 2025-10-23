@@ -5,9 +5,6 @@ import {
     Interaction
 } from 'discord.js';
 
-// Import legacy handlers for Components V2 compatibility
-
-// Import legacy handlers for backward compatibility
 import {
     handleTicketButtons,
     handleVouchTicketButtons,
@@ -44,10 +41,6 @@ import {
 
 import { handleMiddlemanModals } from './modals/middlemanModals';
 
-/**
- * Modern interaction router that handles both new modular commands
- * and legacy interactions for backward compatibility
- */
 export class InteractionRouter {
 
     /**
@@ -449,7 +442,12 @@ export class InteractionRouter {
                         .setLabel('Anime Vanguard')
                         .setDescription('Request a regular help ticket for AV')
                         .setValue('av')
-                        .setEmoji('🛡️')
+                        .setEmoji('🛡️'),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('Anime Crusaders')
+                        .setDescription('Request a regular help ticket for AC')
+                        .setValue('ac')
+                        .setEmoji('⚡')
                 ]);
 
             const row = new (ActionRowBuilder as any)().addComponents(gameSelectMenu);
@@ -499,7 +497,12 @@ export class InteractionRouter {
                         .setLabel('Anime Vanguard')
                         .setDescription('Request carry for AV')
                         .setValue('av')
-                        .setEmoji('🛡️')
+                        .setEmoji('🛡️'),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('Anime Crusaders')
+                        .setDescription('Request carry for AC')
+                        .setValue('ac')
+                        .setEmoji('⚡')
                 ]);
 
             const row = new (ActionRowBuilder as any)().addComponents(gameSelectMenu);
